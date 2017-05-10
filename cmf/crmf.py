@@ -4,7 +4,7 @@ from numpy.linalg import solve
 from scipy import special
 from scipy.misc import logsumexp
 from sklearn.decomposition import FastICA
-from cmf.cmf import CMF
+from cmf.virtual_cmf import CMF
 import pdb
 
 
