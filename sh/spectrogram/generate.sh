@@ -7,7 +7,7 @@ input_dir=$HOME/input/MSD100
 seed_number=0
 component_max=24
 loop_max=2000
-base_max=1000
+base_max=10000
 regularized_max=100
 sampling_step=4
 training_area_length=30
@@ -28,8 +28,8 @@ do
     echo -e "#PBS -N spectrogram_"$1"_"$i>>$file_name
     echo -e "#PBS -o "$1"_"$i"_stdout.txt">>$file_name
     echo -e "#PBS -e "$1"_"$i"_stderr.txt">>$file_name
-    echo -e "#PBS -l nodes=1:"$machine_name>>$file_name
-    echo -e "#PBS -l mem=12gb">>$file_name
+    echo -e "#PBS -l nodes=1:ppn=1:"$machine_name>>$file_name
+    echo -e "#PBS -l mem=8gb">>$file_name
     echo -e "mkdir -p "$py_dir_path>>$file_name
     echo -e "mkdir -p "$pickle_dir_path>>$file_name
     echo -e "mkdir -p "$json_dir_path>>$file_name
