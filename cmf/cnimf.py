@@ -5,12 +5,12 @@ from scipy import special
 from scipy.misc import logsumexp
 from numpy.linalg import solve
 from sklearn.decomposition import FastICA
-from cmf.virtual_cmf import CMF
+from cmf.virtual_cmf import VirtualCMF
 from cmf.cnimf_lvc_nml import CNIMFLVCNML
 import pdb
 
 
-class CNIMF(CMF):
+class CNIMF(VirtualCMF):
     def __init__(self,
                  convolution_max=None, true_width=None,
                  component_max=None, true_n_components=None,

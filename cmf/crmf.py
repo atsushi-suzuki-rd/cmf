@@ -4,11 +4,11 @@ from numpy.linalg import solve
 from scipy import special
 from scipy.misc import logsumexp
 from sklearn.decomposition import FastICA
-from cmf.virtual_cmf import CMF
+from cmf.virtual_cmf import VirtualCMF
 import pdb
 
 
-class CRMF(CMF):
+class CRMF(VirtualCMF):
     def __init__(self,
                  convolution_max = None, true_width = None,
                  component_max = None, true_n_components = None,

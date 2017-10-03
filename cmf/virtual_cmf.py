@@ -14,7 +14,7 @@ from cmf.lvc_aic import LVCAIC
 from cmf.lvc_bic import LVCBIC
 import pdb
 
-class CMF(object, metaclass=ABCMeta):
+class VirtualCMF(object, metaclass=ABCMeta):
     def __init__(self,
                  convolution_max = None, true_width = None,
                  component_max = None, true_n_components = None,
