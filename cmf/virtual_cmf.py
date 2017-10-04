@@ -19,7 +19,7 @@ class VirtualCMF(object, metaclass=ABCMeta):
                  convolution_max = None, true_width = None,
                  component_max = None, true_n_components = None,
                  convergence_threshold = 0.0001, loop_max = 1000, loop_min = 0,
-                 fit_accelerator_max = 0.0, transfer_accelerator_max = 0.0, verbose = 0):
+                 fit_accelerator_max = 0.0, transform_accelerator_max = 0.0, verbose = 0):
         self.true_n_components = true_n_components
         self.true_width = true_width
         if convolution_max is None:
@@ -34,7 +34,7 @@ class VirtualCMF(object, metaclass=ABCMeta):
         self.convergence_threshold = convergence_threshold
         self.component_max = component_max
         self.fit_accelerator_max = fit_accelerator_max
-        self.transfer_accelerator_max = transfer_accelerator_max
+        self.transform_accelerator_max = transform_accelerator_max
         self.verbose = verbose
 
     def _prepare_criteria(self):
@@ -58,7 +58,7 @@ class VirtualCMF(object, metaclass=ABCMeta):
             filtre = np.zeros(X.shape, dtype=bool)
         reversed_filtre = ~np.array(filtre, dtype=bool)
         for criterion in self.criteria:
-            activation = self.transfer_activation_result[criterion.best_structure[0]][criterion.best_structure[1]]
+            activation = self.transform_activation_result[criterion.best_structure[0]][criterion.best_structure[1]]
             base = self.base_result[criterion.best_structure[0]][criterion.best_structure[1]]
             result[criterion.name] = self._divergence(X, activation, base, reversed_filtre)
         return result
@@ -173,28 +173,28 @@ class VirtualCMF(object, metaclass=ABCMeta):
             activation = new_activation
         return (activation, base, self.joint_loss_transition[convolution_width, n_components, :, :], self.elapsed_time[convolution_width, n_components, :, :], loop_cnt)
 
-    def transfer(self, W, y = None, transfer_filtre = None):
-        self._transfer(W, y, transfer_filtre)
+    def transform(self, W, y = None, transform_filtre = None):
+        self._transform(W, y, transform_filtre)
 
-    def _transfer(self, W, y = None, transfer_filtre = None):
+    def _transform(self, W, y = None, transform_filtre = None):
         self.W = W
-        if transfer_filtre is None:
-            self.transfer_filtre = np.ones(W.shape)
+        if transform_filtre is None:
+            self.transform_filtre = np.ones(W.shape)
         else:
-            self.transfer_filtre = transfer_filtre
-        transfer_filtre = self.transfer_filtre
+            self.transform_filtre = transform_filtre
+        transform_filtre = self.transform_filtre
         (self.n_samples, self.data_dim) = W.shape
         if self.component_max is None:
             self.component_max = self.data_dim
-        self.transfer_joint_loss_transition = np.float("nan")  * np.ones([self.convolution_max + 1, self.component_max + 1, self.loop_max])
-        self.transfer_elapsed_time = np.float("nan")  * np.ones([self.convolution_max + 1, self.component_max + 1, self.loop_max])
-        self.transfer_loop_cnt_result = np.float("nan") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.transfer_divergence_result = np.float("inf") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.transfer_activation_loss_result = np.float("inf") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.transfer_joint_loss_result = np.float("inf") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.transfer_completion_result = np.float("nan") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.transfer_activation_result = [[None for col in range(self.component_max + 1)] for row in range(self.convolution_max + 1)]
-        self.transfer_approximation_result = [[None for col in range(self.component_max + 1)] for row in range(self.convolution_max + 1)]
+        self.transform_joint_loss_transition = np.float("nan") * np.ones([self.convolution_max + 1, self.component_max + 1, self.loop_max])
+        self.transform_elapsed_time = np.float("nan") * np.ones([self.convolution_max + 1, self.component_max + 1, self.loop_max])
+        self.transform_loop_cnt_result = np.float("nan") * np.ones([self.convolution_max + 1, self.component_max + 1])
+        self.transform_divergence_result = np.float("inf") * np.ones([self.convolution_max + 1, self.component_max + 1])
+        self.transform_activation_loss_result = np.float("inf") * np.ones([self.convolution_max + 1, self.component_max + 1])
+        self.transform_joint_loss_result = np.float("inf") * np.ones([self.convolution_max + 1, self.component_max + 1])
+        self.transform_completion_result = np.float("nan") * np.ones([self.convolution_max + 1, self.component_max + 1])
+        self.transform_activation_result = [[None for col in range(self.component_max + 1)] for row in range(self.convolution_max + 1)]
+        self.transform_approximation_result = [[None for col in range(self.component_max + 1)] for row in range(self.convolution_max + 1)]
         convolution_range = []
         if self.true_width is None:
             convolution_range = range(1, self.convolution_max + 1)
@@ -208,48 +208,48 @@ class VirtualCMF(object, metaclass=ABCMeta):
         for convolution_width in convolution_range:
             for n_components in component_range:
                 (activation, base, _, _, _)\
-                    = self._transfer_factorize(W, n_components, convolution_width, transfer_filtre)
-                self.transfer_activation_result[convolution_width][n_components] = activation
-                self.transfer_approximation_result[convolution_width][n_components] = self.convolute(activation, base)
+                    = self._transform_factorize(W, n_components, convolution_width, transform_filtre)
+                self.transform_activation_result[convolution_width][n_components] = activation
+                self.transform_approximation_result[convolution_width][n_components] = self.convolute(activation, base)
                 activation_loss = self._activation_loss(activation)
                 base_loss = self._base_loss(base)
-                divergence = self._divergence(W, activation, base, transfer_filtre)
-                self.transfer_activation_loss_result[convolution_width][n_components] = activation_loss
-                self.transfer_divergence_result[convolution_width][n_components] = divergence
+                divergence = self._divergence(W, activation, base, transform_filtre)
+                self.transform_activation_loss_result[convolution_width][n_components] = activation_loss
+                self.transform_divergence_result[convolution_width][n_components] = divergence
                 joint_loss = divergence + activation_loss + base_loss
-                self.transfer_joint_loss_result[convolution_width][n_components] = joint_loss
-                self.transfer_completion_result[convolution_width, n_components]\
+                self.transform_joint_loss_result[convolution_width][n_components] = joint_loss
+                self.transform_completion_result[convolution_width, n_components]\
                 = self._evaluate_completion(W, activation, base)
                 if self.verbose >= 1:
                     print('n_components', n_components, 'convolution_width', convolution_width, 'divergence', divergence, 'joint_loss', joint_loss)
-        self._summarize_transfer()
+        self._summarize_transform()
 
-    def _summarize_transfer(self):
-        self.transfer_activation = self.transfer_activation_result[self.criteria[-1].best_structure[0]][self.criteria[-1].best_structure[1]]
-        self.transfer_approximated = self.convolute(self.transfer_activation, self.base)
+    def _summarize_transform(self):
+        self.transform_activation = self.transform_activation_result[self.criteria[-1].best_structure[0]][self.criteria[-1].best_structure[1]]
+        self.transform_approximated = self.convolute(self.transform_activation, self.base)
 
-    def _transfer_factorize(self, W, n_components, convolution_width, transfer_filtre = None):
-        if transfer_filtre is None:
-            self.transfer_filtre = np.ones(W.shape)
+    def _transform_factorize(self, W, n_components, convolution_width, transform_filtre = None):
+        if transform_filtre is None:
+            self.transform_filtre = np.ones(W.shape)
         else:
-            self.transfer_filtre = transfer_filtre
-        transfer_filtre = self.transfer_filtre
-        return self._multiplicative_transfer(W, n_components, convolution_width, transfer_filtre)
+            self.transform_filtre = transform_filtre
+        transform_filtre = self.transform_filtre
+        return self._multiplicative_transform(W, n_components, convolution_width, transform_filtre)
 
-    def _multiplicative_transfer(self, W, n_components, convolution_width, transfer_filtre):
+    def _multiplicative_transform(self, W, n_components, convolution_width, transform_filtre):
         base = self.base_result[convolution_width][n_components]
-        activation = self._init_activation_for_transfer(W, base, n_components, convolution_width, transfer_filtre)
+        activation = self._init_activation_for_transform(W, base, n_components, convolution_width, transform_filtre)
         previous_loss = np.float("inf")
         loop_cnt = self.loop_max
         time_origin = time.time()
-        accelerator_max = self.transfer_accelerator_max
+        accelerator_max = self.transform_accelerator_max
         accelerator = 10. ** (accelerator_max / loop_cnt * np.arange(0.0, loop_cnt)[::-1])
         for loop_idx in range(0, self.loop_max):
-            new_activation = self._update_activation(W, activation, base, transfer_filtre, accelerator[loop_idx])
-            present_loss = self._joint_loss(W, new_activation, base, transfer_filtre)
-            self.transfer_joint_loss_transition[convolution_width, n_components, loop_idx] = present_loss
+            new_activation = self._update_activation(W, activation, base, transform_filtre, accelerator[loop_idx])
+            present_loss = self._joint_loss(W, new_activation, base, transform_filtre)
+            self.transform_joint_loss_transition[convolution_width, n_components, loop_idx] = present_loss
             elapsed_time = time.time() - time_origin
-            self.transfer_elapsed_time[convolution_width, n_components, loop_idx] = elapsed_time
+            self.transform_elapsed_time[convolution_width, n_components, loop_idx] = elapsed_time
             if self.verbose >=2:
                 print('loop_idx', loop_idx, 'accelerator', accelerator[loop_idx], 'elapsed_time', elapsed_time, 'joint_loss', present_loss)
             if np.isinf(present_loss):
@@ -260,7 +260,7 @@ class VirtualCMF(object, metaclass=ABCMeta):
                 break
             previous_loss = present_loss
             activation = new_activation
-        return (activation, base, self.transfer_joint_loss_transition[convolution_width, n_components, :], self.transfer_elapsed_time[convolution_width, n_components, :], loop_cnt)
+        return (activation, base, self.transform_joint_loss_transition[convolution_width, n_components, :], self.transform_elapsed_time[convolution_width, n_components, :], loop_cnt)
 
     def _scipy_update(self, X, n_components, convolution_width, filtre, activation_bound=(None, None), base_bound=(None, None)):
         (activation, base) = self._init_activation_base(X, n_components, convolution_width, filtre)
@@ -297,7 +297,7 @@ class VirtualCMF(object, metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def _init_activation_for_transfer(self, W, base, n_components, convolution_width, filtre):
+    def _init_activation_for_transform(self, W, base, n_components, convolution_width, filtre):
         raise NotImplementedError()
 
     @abstractmethod

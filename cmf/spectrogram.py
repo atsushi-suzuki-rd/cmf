@@ -103,7 +103,7 @@ nmf = CNIMF(true_width=1, verbose=0, component_max=component_max, base_max=base_
 
 nmf.fit(train_data.T)
 
-nmf.transfer(test_data.T, transfer_filtre=filtre.T)
+nmf.transform(test_data.T, transform_filtre=filtre.T)
 
 nmf_criteria_completion = nmf.evaluate_criteria(test_data.T, filtre.T)
 
@@ -120,7 +120,7 @@ cnimf = CNIMF(true_width=true_width, verbose=0, component_max=component_max, bas
 
 cnimf.fit(train_data.T)
 
-cnimf.transfer(test_data.T, transfer_filtre=filtre.T)
+cnimf.transform(test_data.T, transform_filtre=filtre.T)
 
 cnimf_criteria_completion = cnimf.evaluate_criteria(test_data.T, filtre.T)
 

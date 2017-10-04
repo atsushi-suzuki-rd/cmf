@@ -123,7 +123,7 @@ class CNIMF(VirtualCMF):
             Th = np.random.uniform(0.0, self.base_max, [M, K, Om])
         return (np.abs(Z), np.abs(Th))
 
-    def _init_activation_for_transfer(self, W, base, n_components, convolution_width, filtre):
+    def _init_activation_for_transform(self, W, base, n_components, convolution_width, filtre):
         (T, Om) = W.shape
         K = n_components
         F = filtre

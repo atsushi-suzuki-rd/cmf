@@ -8,7 +8,7 @@ from cmf.virtual_cmf import VirtualCMF
 import pdb
 
 
-class CRMF(VirtualCMF):
+class CMFPN(VirtualCMF):
     def __init__(self,
                  convolution_max = None, true_width = None,
                  component_max = None, true_n_components = None,
@@ -16,7 +16,7 @@ class CRMF(VirtualCMF):
                  activation_l1_weight = 2.0, activation_l2_weight = 2.0,
                  base_max = 10.0,
                  fit_accelerator_max = 0.0,
-                 transfer_accelerator_max = 0.0,
+                 transform_accelerator_max = 0.0,
                  initialization = 'smooth_svd',
                  verbose = 0):
 
@@ -30,7 +30,7 @@ class CRMF(VirtualCMF):
             loop_min = loop_min,
             verbose = verbose,
             fit_accelerator_max = fit_accelerator_max,
-            transfer_accelerator_max = transfer_accelerator_max))
+            transfer_accelerator_max = transform_accelerator_max))
         self.activation_l1_weight = np.array(activation_l1_weight)
         self.activation_l2_weight = np.array(activation_l2_weight)
         self.initialization = initialization
@@ -95,7 +95,7 @@ class CRMF(VirtualCMF):
             Th = np.random.uniform(-1.0, 1.0, [M, K, Om])
         return (Z, Th)
 
-    def _init_activation_for_transfer(self, W, base, n_components, convolution_width, filtre):
+    def _init_activation_for_transform(self, W, base, n_components, convolution_width, filtre):
         (T, Om) = W.shape
         K = n_components
         F = filtre
