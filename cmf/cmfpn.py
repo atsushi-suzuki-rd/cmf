@@ -11,7 +11,7 @@ import pdb
 class CMFPN(VirtualCMF):
 
     SIGNAL_BOUND = (None, None)
-    RESPONSE_BOUND = (None, None),
+    RESPONSE_BOUND = (None, None)
 
     def __init__(self,
                  convolution_width,

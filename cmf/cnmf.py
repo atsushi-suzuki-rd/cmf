@@ -13,7 +13,7 @@ import pdb
 class CNMF(VirtualCMF):
 
     SIGNAL_BOUND = (0, None)
-    RESPONSE_BOUND = (0, None),
+    RESPONSE_BOUND = (0, None)
 
     def __init__(self,
                  convolution_width,

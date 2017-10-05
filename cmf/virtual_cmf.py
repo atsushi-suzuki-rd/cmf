@@ -16,6 +16,9 @@ import pdb
 
 class VirtualCMF(object, metaclass=ABCMeta):
 
+    SIGNAL_BOUND = (None, None)
+    RESPONSE_BOUND = (None, None)
+
     def __init__(self,
                  convolution_width,
                  n_components,
@@ -142,8 +145,8 @@ class VirtualCMF(object, metaclass=ABCMeta):
         return (signal, response, self.joint_loss_transition, self.elapsed_time_transition, final_loop_cnt)
 
     def _scipy_update(self, X, filtre, mode=None):
-        signal_bound = self.signal_bound
-        response_bound = self.response_bound
+        signal_bound = self.SIGNAL_BOUND
+        response_bound = self.RESPONSE_BOUND
         if mode == 'fit':
             (signal, response) = self._init_signal_response(X, filtre)
             param_vec = self._param_mat2vec(signal, response)
