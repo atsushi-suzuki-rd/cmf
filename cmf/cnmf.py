@@ -16,7 +16,8 @@ class CNMF(VirtualCMF):
                  component_max=None, true_n_components=None,
                  convergence_threshold=0.0001, loop_max=1000, loop_min=0,
                  gamma_shape=2.0, gamma_rate=2.0,
-                 base_max=10.0, initialization='smooth_svd', verbose=0):
+                 base_max=10.0, initialization='smooth_svd', bias=0.0,
+                 verbose=0):
 
         super().__init__(**dict(
             convolution_max=convolution_max,
@@ -31,6 +32,7 @@ class CNMF(VirtualCMF):
         self.gamma_rate = gamma_rate
         self.initialization = initialization
         self.base_max = base_max
+        self.bias = 0.0
 
     def _prepare_special_criteria(self):
         opt_dict = dict(
@@ -123,14 +125,14 @@ class CNMF(VirtualCMF):
             Th = np.random.uniform(0.0, self.base_max, [M, K, Om])
         return (np.abs(Z), np.abs(Th))
 
-    def _init_activation_for_transform(self, W, base, n_components, convolution_width, filtre):
-        (T, Om) = W.shape
+    def _init_activation_for_transform(self, new_X, base, n_components, convolution_width, filtre):
+        (T, Om) = new_X.shape
         K = n_components
         F = filtre
         Th = base
         Th0 = Th[0, :, :]
         SMALL_NUM = np.finfo(float).eps
-        Z = solve(((Th0) @ Th0.T + SMALL_NUM * np.identity(K)).T, (((F * W)) @ Th0.T).T).T
+        Z = solve(((Th0) @ Th0.T + SMALL_NUM * np.identity(K)).T, (((F * new_X)) @ Th0.T).T).T
         return np.abs(Z)
 
     def _activation_loss(self, activation):

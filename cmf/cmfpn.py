@@ -36,7 +36,7 @@ class CMFPN(VirtualCMF):
         self.initialization = initialization
         self.base_max = base_max
 
-    def fit(self, X, y = None, filtre = None, loss_weight = None, base_l1_weight = None, base_l2_weight = None):
+    def fit(self, X, filtre = None, loss_weight = None, base_l1_weight = None, base_l2_weight = None):
         if loss_weight is None:
             self.loss_weight = np.mean(X * X, axis=0)
         else:
@@ -44,7 +44,8 @@ class CMFPN(VirtualCMF):
                 raise ValueError('loss_weight.shape[0] != X.shape[1]')
             self.loss_weight = loss_weight
         if base_l2_weight is None:
-            self.base_l2_weight = np.mean(X * X, axis=0)
+            # self.base_l2_weight = np.mean(X * X, axis=0)
+            self.base_l1_weight = np.ones(X.shape[1])
         else:
             if base_l2_weight.shape[0] != X.shape[1]:
                 raise ValueError('base_l2_weight.shape[0] != X.shape[1]')

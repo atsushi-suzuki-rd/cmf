@@ -173,17 +173,17 @@ class VirtualCMF(object, metaclass=ABCMeta):
             activation = new_activation
         return (activation, base, self.joint_loss_transition[convolution_width, n_components, :, :], self.elapsed_time[convolution_width, n_components, :, :], loop_cnt)
 
-    def transform(self, W, y = None, transform_filtre = None):
-        self._transform(W, y, transform_filtre)
+    def transform(self, X, filtre = None):
+        self._transform(X, transform_filtre=filtre)
 
-    def _transform(self, W, y = None, transform_filtre = None):
-        self.W = W
+    def _transform(self, X, transform_filtre = None):
+        self.new_X = X
         if transform_filtre is None:
-            self.transform_filtre = np.ones(W.shape)
+            self.transform_filtre = np.ones(X.shape)
         else:
             self.transform_filtre = transform_filtre
         transform_filtre = self.transform_filtre
-        (self.n_samples, self.data_dim) = W.shape
+        (self.n_samples, self.data_dim) = X.shape
         if self.component_max is None:
             self.component_max = self.data_dim
         self.transform_joint_loss_transition = np.float("nan") * np.ones([self.convolution_max + 1, self.component_max + 1, self.loop_max])
@@ -208,18 +208,18 @@ class VirtualCMF(object, metaclass=ABCMeta):
         for convolution_width in convolution_range:
             for n_components in component_range:
                 (activation, base, _, _, _)\
-                    = self._transform_factorize(W, n_components, convolution_width, transform_filtre)
+                    = self._transform_factorize(X, n_components, convolution_width, transform_filtre)
                 self.transform_activation_result[convolution_width][n_components] = activation
                 self.transform_approximation_result[convolution_width][n_components] = self.convolute(activation, base)
                 activation_loss = self._activation_loss(activation)
                 base_loss = self._base_loss(base)
-                divergence = self._divergence(W, activation, base, transform_filtre)
+                divergence = self._divergence(X, activation, base, transform_filtre)
                 self.transform_activation_loss_result[convolution_width][n_components] = activation_loss
                 self.transform_divergence_result[convolution_width][n_components] = divergence
                 joint_loss = divergence + activation_loss + base_loss
                 self.transform_joint_loss_result[convolution_width][n_components] = joint_loss
                 self.transform_completion_result[convolution_width, n_components]\
-                = self._evaluate_completion(W, activation, base)
+                = self._evaluate_completion(X, activation, base)
                 if self.verbose >= 1:
                     print('n_components', n_components, 'convolution_width', convolution_width, 'divergence', divergence, 'joint_loss', joint_loss)
         self._summarize_transform()

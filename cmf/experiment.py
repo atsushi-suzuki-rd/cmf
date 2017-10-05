@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn import linear_model
 import pyper
-from cmf.crmf import CRMF
+from cmf.cmfpn import CMFPN
 from cmf.cnmf import CNMF
 
 
@@ -154,6 +154,49 @@ def generate_data(data_list, start_iter_list, data_length, interval):
     for start_sec_tuple in zip(*start_iter_list):
         yield tuple(truncate(data, start_sec, interval) for data, start_sec in zip(data_list, start_sec_tuple))
 
+cmfpn_arg_dict = dict(
+    convolution_max=200,
+    true_width=10000 // interval,
+    true_n_components=2,
+    activation_l1_weight=l1_weight,
+    activation_l2_weight=0.0,
+    base_max=10.0,
+    convergence_threshold=0.0000001,
+    loop_max=100,
+    fit_accelerator_max=0.0,
+    transfer_accelerator_max=0.0,
+    verbose=0,
+    initialization='smooth_svd')
+
+cnmf_arg_dict = dict(
+    convolution_max=200,
+    true_width=10000 // interval,
+    true_n_components=2,
+    base_max=10.0,
+    convergence_threshold=0.0000001,
+    loop_max=100)
+
+nmf_arg_dict = dict(
+    convolution_max=200,
+    true_width=1,
+    true_n_components=2,
+    base_max=10.0,
+    convergence_threshold=0.0000001,
+    loop_max=100)
+
+min_XY = np.min(XY_train)
+XY_train_shifted = XY_train - min_XY
+cnimf.fit(XY_train_shifted, None, filtre=F_train)
+XO_test_shifted = np.maximum(XO_test - min_XY, np.zeros(XO_test.shape))
+cnimf.transfer(XO_test_shifted, transfer_filtre=F_test)
+XY_cnimf = cnimf.transfer_approximated + min_XY
+cnimf_completion_error = np.mean(((XY_cnimf - XY_test)[:, hidden_column_idxs]) ** 2)
+cnimf_bias = (XY_cnimf - XY_test).mean()
+cnimf_with_bias_modification_completion_error = np.mean(((XY_cnimf - cnimf_bias - XY_test)[:, hidden_column_idxs]) ** 2)
+cnimf_completion_error_table[i_start] = cnimf_completion_error
+cnimf_with_bias_modification_completion_error_table[i_start] = cnimf_with_bias_modification_completion_error
+test_data_mean_square_table[i_start] = np.mean(XY_test ** 2)
+
 regressor_dict = {
     'lr': linear_model.LinearRegression(normalize=False),
     'lr_n': linear_model.LinearRegression(normalize=True),
@@ -163,6 +206,9 @@ regressor_dict = {
     'svd_n': MatrixCompletionRegression(RPCA(n_components=2, method_name='svd', scale='vector', center='TRUE')),
     'ppca': MatrixCompletionRegression(RPCA(n_components=2, method_name='ppca')),
     'ppca_n': MatrixCompletionRegression(RPCA(n_components=2, method_name='ppca', scale='vector', center='TRUE')),
+    'nmf': MatrixCompletionRegression(CNMF(**nmf_arg_dict)),
+    'cnmf': MatrixCompletionRegression(CNMF(**cnmf_arg_dict)),
+    'cmf': MatrixCompletionRegression(CMFPN(**cmfpn_arg_dict)),
 }
 
 loss_dict = {}
@@ -226,20 +272,6 @@ for i_start in range(len(train_start_list)):
         mlrn_error_table[i_regression_window_length, i_start] = mlrn_error
     for i_l1_weight in range(len(l1_weight_list)):
         l1_weight = l1_weight_list[i_l1_weight]
-        crmf_arg_dict = dict(
-            convolution_max=200,
-            true_width=10000 // interval,
-            true_n_components=2,
-            activation_l1_weight=l1_weight,
-            activation_l2_weight=0.0,
-            base_max=10.0,
-            convergence_threshold=0.0000001,
-            loop_max=100,
-            fit_accelerator_max=0.0,
-            transfer_accelerator_max=0.0,
-            verbose=0,
-            initialization='smooth_svd')
-        crmf = CRMF(**crmf_arg_dict)
         loss_weight = 1.0 / np.ones(XY_train.shape[1])
         base_l2_weight = 1.0 / np.ones(XY_train.shape[1])
         base_l1_weight = 0.0 / np.ones(XY_train.shape[1])
