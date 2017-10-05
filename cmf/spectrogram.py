@@ -15,7 +15,7 @@ import matplotlib
 # sys.path.append('..')
 from matplotlib import pylab as plt
 from scipy.io.wavfile import read
-from cmf.cnimf import CNIMF
+from cmf.cnmf import CNMF
 import json
 import pickle
 
@@ -99,7 +99,7 @@ test_data = np.abs(test_spec) # np.log((np.abs(test_spec) ** 2) + 1.0)
 true_width = args.convolution_width
 component_max = args.component_max
 
-nmf = CNIMF(true_width=1, verbose=0, component_max=component_max, base_max=base_max, loop_max=loop_max)
+nmf = CNMF(true_width=1, verbose=0, component_max=component_max, base_max=base_max, loop_max=loop_max)
 
 nmf.fit(train_data.T)
 
@@ -116,7 +116,7 @@ print(nmf_criteria_completion)
 # with open(pickle_file_path, 'wb') as f:
 #     pickle.dump(nmf, f)
 
-cnimf = CNIMF(true_width=true_width, verbose=0, component_max=component_max, base_max=base_max, loop_max=loop_max)
+cnimf = CNMF(true_width=true_width, verbose=0, component_max=component_max, base_max=base_max, loop_max=loop_max)
 
 cnimf.fit(train_data.T)
 

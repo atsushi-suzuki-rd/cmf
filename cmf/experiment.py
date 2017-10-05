@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn import linear_model
 import pyper
 from cmf.crmf import CRMF
-from cmf.cnimf import CNIMF
+from cmf.cnmf import CNMF
 
 
 class TimeSeriesLinearRegression(object):

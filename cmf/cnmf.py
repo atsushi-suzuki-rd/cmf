@@ -10,7 +10,7 @@ from cmf.cnimf_lvc_nml import CNIMFLVCNML
 import pdb
 
 
-class CNIMF(VirtualCMF):
+class CNMF(VirtualCMF):
     def __init__(self,
                  convolution_max=None, true_width=None,
                  component_max=None, true_n_components=None,
