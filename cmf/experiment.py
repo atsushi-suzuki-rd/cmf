@@ -6,61 +6,27 @@ from cmf.crmf import CRMF
 from cmf.cnimf import CNIMF
 
 
-data = pd.read_csv(file_path, delim_whitespace=True)
-gas_columns = list(data.columns[1:3])
-used_columns = list(data.columns[3:19])
-observable_columns = list(data.columns[5:7])
-hidden_columns = list(set(used_columns) - set(observable_columns))
-gas_column_idxs = [1,2]
-observable_column_idxs = [used_columns.index(column_name) for column_name in observable_columns]
-hidden_column_idxs = [used_columns.index(column_name) for column_name in hidden_columns]
-interval = 200
-raw_down_sampled = data[::interval]
-m = raw_down_sampled[used_columns].mean(axis = 0)
-s = raw_down_sampled[used_columns].std(axis = 0)
-down_sampled = pd.DataFrame(raw_down_sampled)
-down_sampled[used_columns] = raw_down_sampled[used_columns].sub(m).div(s)
-train_data_length = 250000
-test_data_length = 250000
-train_start_list = [1750000, 2250000, 2750000, 3250000, 250000, 750000, 1250000]
-test_start_list = [250000, 750000, 1250000, 1750000, 2250000, 2750000, 3250000]
-regression_window_length_list = [400, 600, 800, 1000, 1200]
-l1_weight_list = [0.01, 0.02, 0.03, 0.04, 0.05]
-lr_error_table = np.float('nan') * np.ones(len(train_start_list))
-lrn_error_table = np.float('nan') * np.ones(len(train_start_list))
-mlr_error_table = np.float('nan') * np.ones([len(regression_window_length_list), len(train_start_list)])
-mlrn_error_table = np.float('nan') * np.ones([len(regression_window_length_list), len(train_start_list)])
-crmf_completion_error_table = np.float('nan') * np.ones((len(l1_weight_list), len(train_start_list)))
-cnimf_completion_error_table = np.float('nan') * np.ones((len(train_start_list),))
-cnimf_with_bias_modification_completion_error_table = np.float('nan') * np.ones((len(train_start_list),))
-test_data_mean_square_table = np.float('nan') * np.ones((len(train_start_list),))
+class TimeSeriesLinearRegression(object):
+    def __init__(self, window_width=5, **kwargs):
+        self.window_width=window_width
+        self.linear_regressor = linear_model.LinearRegression(**kwargs)
+
+    def fit(self, X, Y, **kwargs):
+        XX = self._sliding_duplicate(X)
+        self.linear_regressor.fit(XX, Y)
+
+    def predict(self, X, **kwargs):
+        XX = self._sliding_duplicate(X)
+        return self.linear_regressor.predict(XX)
+
+    def _sliding_duplicate(self, X):
+        return np.concatenate(
+            [np.pad(np.array(X), self.window_width, mode='constant', axis=0)[self.window_width-i:-(self.window_width-i), :]
+            for i in range(-self.window_width, self.window_width)],
+            axis=1)
 
 
-def rmse(Y_hat, Y_test):
-    return np.sqrt(np.mean((Y_hat - Y_test) ** 2))
-
-loss_function = rmse
-
-def generate_data(data_list, start_iter_list, data_length, interval):
-    def truncate(data, start)
-    for start_sec in start_iter_list:
-        start_point = start_sec // interval
-        end_point = start_point + (data_length // interval)
-        yield (data[start_point:end_point] for data in data_list)
-
-loss_dict = {}
-for regressor_name in regressor_dict:
-    loss_dict[regressor_name] = np.full(len(train_section_list), np.nan)
-
-for X_train, Y_train, X_test, Y_test in generate_data(data_list=[X, Y, X, Y], [train_section_list, train_section_list, test_section_list, test_section_list]):
-    for regressor_name, regressor in regressor_dict.items():
-        regressor.fit(X_train, Y_train)
-        Y_hat = regressor.predict(X_test)
-        loss = loss_function(Y_hat, Y_test)
-        loss_dict[regressor_name][i_section] = loss
-
-
-class MatrixCompletionRegressor(object):
+class MatrixCompletionRegression(object):
     def __init__(self, matrix_factorizer):
         self.matrix_factorizer = matrix_factorizer
         self.X_n_features = None
@@ -86,17 +52,19 @@ class RPCA(object):
     n_instances = 0
     r = pyper.R(use_pandas='True', use_numpy=True)
 
-    def __init__(self, n_components=2, method_name='ppca'):
+    def __init__(self, n_components=2, method_name='ppca', scale='none', center='FALSE'):
         self.identifier = 'py_{}'.format(self.n_instances)
         self.n_instances += 1
         self.pca_str = 'pca_{}'.format(self.identifier)
         self.loadings_str = 'loadings_{}'.format(self.identifier)
         self.n_components = n_components
         self.method_name = method_name
+        self.scale = scale
+        self.center = center
         self.loadings = None
 
     def fit(self, X):
-        self._fit(self, X)
+        self._fit(X)
 
     def _fit(self, X):
         self._fit_transform(X)
@@ -108,7 +76,13 @@ class RPCA(object):
         X_str = 'X_{}'.format(self.identifier)
         scores_str = 'scores_{}'.format(self.identifier)
         self.r.assign(X_str, X)
-        self.r('{} <- pca({}, method="{}", nPcs={})'.format(self.pca_str, X_str, self.method_name, self.n_components))
+        self.r('{} <- pca({}, method="{}", nPcs={}, scale={}, center={})'.format(
+            self.pca_str,
+            X_str,
+            self.method_name,
+            self.n_components,
+            self.scale,
+            self.center))
         self.r('{} <- {}@loadings'.format(self.loadings_str, self.pca_str))
         self.r('{} <- {}@scores'.format(scores_str, self.pca_str))
         self.loadings = self.r.get('t({})'.format(self.loadings_str))
@@ -131,6 +105,82 @@ class RPCA(object):
 
     def inverse_transform(self, scores):
         return scores @ self.loadings
+
+
+
+data = pd.read_csv(file_path, delim_whitespace=True)
+gas_columns = list(data.columns[1:3])
+used_columns = list(data.columns[3:19])
+observable_columns = list(data.columns[5:7])
+hidden_columns = list(set(used_columns) - set(observable_columns))
+gas_column_idxs = [1,2]
+observable_column_idxs = [used_columns.index(column_name) for column_name in observable_columns]
+hidden_column_idxs = [used_columns.index(column_name) for column_name in hidden_columns]
+interval = 200
+raw_down_sampled = data[::interval]
+m = raw_down_sampled[used_columns].mean(axis = 0)
+s = raw_down_sampled[used_columns].std(axis = 0)
+down_sampled = pd.DataFrame(raw_down_sampled)
+down_sampled[used_columns] = raw_down_sampled[used_columns].sub(m).div(s)
+train_data_length = 250000
+test_data_length = 250000
+train_start_list = [1750000, 2250000, 2750000, 3250000, 250000, 750000, 1250000]
+test_start_list = [250000, 750000, 1250000, 1750000, 2250000, 2750000, 3250000]
+train_section_list = [(start, start+train_data_length) for start in train_start_list]
+test_section_list = [(start, start+train_data_length) for start in train_start_list]
+# regression_window_length_list = [400, 600, 800, 1000, 1200]
+# l1_weight_list = [0.01, 0.02, 0.03, 0.04, 0.05]
+# lr_error_table = np.float('nan') * np.ones(len(train_start_list))
+# lrn_error_table = np.float('nan') * np.ones(len(train_start_list))
+# mlr_error_table = np.float('nan') * np.ones([len(regression_window_length_list), len(train_start_list)])
+# mlrn_error_table = np.float('nan') * np.ones([len(regression_window_length_list), len(train_start_list)])
+# crmf_completion_error_table = np.float('nan') * np.ones((len(l1_weight_list), len(train_start_list)))
+# cnimf_completion_error_table = np.float('nan') * np.ones((len(train_start_list),))
+# cnimf_with_bias_modification_completion_error_table = np.float('nan') * np.ones((len(train_start_list),))
+# test_data_mean_square_table = np.float('nan') * np.ones((len(train_start_list),))
+
+
+def rmse(Y_hat, Y_test):
+    return np.sqrt(np.mean((Y_hat - Y_test) ** 2))
+
+loss_function = rmse
+
+
+def generate_data(data_list, start_iter_list, data_length, interval):
+    def truncate(data, start_sec, interval):
+        start_point = start_sec // interval
+        end_point = start_point + (data_length // interval)
+        return data[start_point:end_point]
+    for start_sec_tuple in zip(*start_iter_list):
+        yield tuple(truncate(data, start_sec, interval) for data, start_sec in zip(data_list, start_sec_tuple))
+
+regressor_dict = {
+    'lr': linear_model.LinearRegression(normalize=False),
+    'lr_n': linear_model.LinearRegression(normalize=True),
+    'tlr': TimeSeriesLinearRegression(normalize=False),
+    'tlr_n': TimeSeriesLinearRegression(normalize=True),
+    'svd': MatrixCompletionRegression(RPCA(n_components=2, method_name='svd')),
+    'svd_n': MatrixCompletionRegression(RPCA(n_components=2, method_name='svd', scale='vector', center='TRUE')),
+    'ppca': MatrixCompletionRegression(RPCA(n_components=2, method_name='ppca')),
+    'ppca_n': MatrixCompletionRegression(RPCA(n_components=2, method_name='ppca', scale='vector', center='TRUE')),
+}
+
+loss_dict = {}
+for regressor_name in regressor_dict:
+    loss_dict[regressor_name] = np.full(len(train_section_list), np.nan)
+
+for i_section, (X_train, Y_train, X_test, Y_test) \
+        in enumerate(generate_data(data_list=[X, Y, X, Y],
+                                   start_iter_list=[train_section_list,
+                                                    train_section_list,
+                                                    test_section_list,
+                                                    test_section_list])):
+    for regressor_name, regressor in regressor_dict.items():
+        regressor.fit(X_train, Y_train)
+        Y_hat = regressor.predict(X_test)
+        loss = loss_function(Y_hat, Y_test)
+        loss_dict[regressor_name][i_section] = loss
+
 
 for i_start in range(len(train_start_list)):
     train_start = train_start_list[i_start] // interval
