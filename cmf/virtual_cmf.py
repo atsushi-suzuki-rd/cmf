@@ -61,9 +61,13 @@ class VirtualCMF(object, metaclass=ABCMeta):
     def _preprocess_input(self, X):
         return X
 
+    def _check_input(self, X):
+        pass
+
     def _factorize(self, X, filtre, mode):
         X = X.astype(np.float64)
         self.X = X
+        self._check_input(X)
         X = self._preprocess_input(X)
         if filtre is None:
             self.filtre = np.ones(X.shape)

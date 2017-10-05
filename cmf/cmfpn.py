@@ -17,7 +17,8 @@ class CMFPN(VirtualCMF):
                  convolution_width,
                  n_components,
                  convergence_threshold=0.0001, loop_max=1000, loop_min=0,
-                 activation_l1_weight=2.0, activation_l2_weight=2.0,
+                 signal_l1_weight=2.0, signal_l2_weight=2.0,
+                 loss_weight=None, response_l1_weight=None, response_l2_weight=None,
                  fit_accelerator_max=0.0, transform_accelerator_max=0.0,
                  initialization='smooth_svd',
                  method='mu',
@@ -33,31 +34,35 @@ class CMFPN(VirtualCMF):
             fit_accelerator_max=fit_accelerator_max,
             transform_accelerator_max=transform_accelerator_max,
             method=method))
-        self.activation_l1_weight = np.array(activation_l1_weight)
-        self.activation_l2_weight = np.array(activation_l2_weight)
+        self.signal_l1_weight = np.array(signal_l1_weight)
+        self.signal_l2_weight = np.array(signal_l2_weight)
         self.initialization = initialization
+        self.loss_weight = loss_weight
+        self.response_l1_weight = response_l1_weight
+        self.response_l2_weight = response_l2_weight
 
-    def fit(self, X, filtre = None, loss_weight = None, base_l1_weight = None, base_l2_weight = None):
-        if loss_weight is None:
+    def _check_input(self, X):
+        if self.loss_weight is None:
             self.loss_weight = np.mean(X * X, axis=0)
+        elif isinstance(self.loss_weight, (int, float)):
+            self.loss_weight = np.full(X.shape[1], self.loss_weight)
         else:
-            if loss_weight.shape[0] != X.shape[1]:
+            if self.loss_weight.shape[0] != X.shape[1]:
                 raise ValueError('loss_weight.shape[0] != X.shape[1]')
-            self.loss_weight = loss_weight
-        if base_l2_weight is None:
-            # self.base_l2_weight = np.mean(X * X, axis=0)
-            self.base_l2_weight = np.ones(X.shape[1])
+        if self.response_l2_weight is None:
+            self.response_l2_weight = np.mean(X * X, axis=0)
+        elif isinstance(self.response_l2_weight, (int, float)):
+            self.response_l2_weight = np.full(X.shape[1], self.response_l2_weight)
         else:
-            if base_l2_weight.shape[0] != X.shape[1]:
+            if self.response_l2_weight.shape[0] != X.shape[1]:
                 raise ValueError('base_l2_weight.shape[0] != X.shape[1]')
-            self.base_l2_weight = base_l2_weight
-        if base_l1_weight is None:
-            self.base_l1_weight = np.zeros(X.shape[1])
+        if self.response_l1_weight is None:
+            self.response_l1_weight = np.zeros(X.shape[1])
+        elif isinstance(self.response_l1_weight, (int, float)):
+            self.response_l1_weight = np.full(X.shape[1], self.response_l1_weight)
         else:
-            if base_l1_weight.shape[0] != X.shape[1]:
+            if self.response_l1_weight.shape[0] != X.shape[1]:
                 raise ValueError('base_l1_weight.shape[0] != X.shape[1]')
-            self.base_l1_weight = base_l1_weight
-        self._fit(X, y, filtre)
 
     def _prepare_special_criteria(self):
         pass
@@ -114,8 +119,8 @@ class CMFPN(VirtualCMF):
         (T, Om) = X.shape
         (M, K, Om) = Th.shape
         F = filtre
-        rh = self.activation_l1_weight
-        sg = self.activation_l2_weight
+        rh = self.signal_l1_weight
+        sg = self.signal_l2_weight
         Rh = rh * np.ones(Z.shape)
         Sg = sg * np.ones(Z.shape)
         Xi = self.convolute(Z, Th)
@@ -136,8 +141,8 @@ class CMFPN(VirtualCMF):
         (T, Om) = X.shape
         (M, K, Om) = Th.shape
         F = filtre
-        kp = self.base_l1_weight
-        nu = self.base_l2_weight
+        kp = self.response_l1_weight
+        nu = self.response_l2_weight
         Kp = np.ones([K, 1]) @ kp[np.newaxis, :]
         Nu = np.ones([K, 1]) @ nu[np.newaxis, :]
         Xi = self.convolute(Z, Th)
@@ -154,11 +159,11 @@ class CMFPN(VirtualCMF):
 
     def _signal_loss(self, signal):
         Z = signal
-        return self.activation_l1_weight * np.sum(np.abs(Z)) + self.activation_l2_weight * np.sum(Z * Z)
+        return self.signal_l1_weight * np.sum(np.abs(Z)) + self.signal_l2_weight * np.sum(Z * Z)
 
     def _response_loss(self, response):
         Th = response
-        return np.sum(np.abs(Th) * self.base_l1_weight) + np.sum(Th * Th * self.base_l2_weight)
+        return np.sum(np.abs(Th) * self.response_l1_weight) + np.sum(Th * Th * self.response_l2_weight)
 
     def _divergence(self, X, activation, base, filtre=None):
         if filtre is None:
