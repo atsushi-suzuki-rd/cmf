@@ -16,57 +16,33 @@ import pdb
 
 class VirtualCMF(object, metaclass=ABCMeta):
     def __init__(self,
-                 convolution_max = None, true_width = None,
-                 component_max = None, true_n_components = None,
+                 convolution_width,
+                 n_components,
                  convergence_threshold = 0.0001, loop_max = 1000, loop_min = 0,
                  fit_accelerator_max = 0.0, transform_accelerator_max = 0.0, verbose = 0):
-        self.true_n_components = true_n_components
-        self.true_width = true_width
-        if convolution_max is None:
-            if true_width is None:
-                self.convolution_max = 6
-            else:
-                self.convolution_max = true_width
-        else:
-            self.convolution_max = convolution_max
+        self.n_components = n_components
+        self.convolution_width = convolution_width
         self.loop_max = loop_max
         self.loop_min = loop_min
         self.convergence_threshold = convergence_threshold
-        self.component_max = component_max
         self.fit_accelerator_max = fit_accelerator_max
         self.transform_accelerator_max = transform_accelerator_max
         self.verbose = verbose
+        self.final_loop_cnt = None
+        self.divergence = None
+        self.signal_loss = None
+        self.response_loss = None
+        self.joint_loss = None
+        self.completion_quality = None
+        self.signal = None
+        self.response = None
+        self.approximate = None
+        self.completion_quality = None
 
-    def _prepare_criteria(self):
-        self.criteria = []
-        self._prepare_basic_criteria()
-        self._prepare_special_criteria()
+    def fit(self, X, filtre = None):
+        self._fit(X, filtre)
 
-    def _prepare_basic_criteria(self):
-        self.criteria.append(FactorizationAIC('factorization AIC', self.convolution_max, self.component_max))
-        self.criteria.append(FactorizationBIC('factorization BIC', self.convolution_max, self.component_max))
-        self.criteria.append(LVCAIC('AIC with LVC', self.convolution_max, self.component_max))
-        self.criteria.append(LVCBIC('BIC with LVC', self.convolution_max, self.component_max))
-
-    @abstractmethod
-    def _prepare_special_criteria(self):
-        raise NotImplementedError()
-
-    def evaluate_criteria(self, X, filtre=None):
-        result = {}
-        if filtre is None:
-            filtre = np.zeros(X.shape, dtype=bool)
-        reversed_filtre = ~np.array(filtre, dtype=bool)
-        for criterion in self.criteria:
-            activation = self.transform_activation_result[criterion.best_structure[0]][criterion.best_structure[1]]
-            base = self.base_result[criterion.best_structure[0]][criterion.best_structure[1]]
-            result[criterion.name] = self._divergence(X, activation, base, reversed_filtre)
-        return result
-
-    def fit(self, X, y = None, filtre = None):
-        self._fit(X, y, filtre)
-
-    def _fit(self, X, y = None, filtre = None):
+    def _fit(self, X, filtre = None):
         self.X = X
         if filtre is None:
             self.filtre = np.ones(X.shape)
@@ -74,66 +50,21 @@ class VirtualCMF(object, metaclass=ABCMeta):
             self.filtre = filtre
         filtre = self.filtre
         (self.n_samples, self.data_dim) = X.shape
-        if self.component_max is None:
-            self.component_max = self.data_dim
-        self._prepare_criteria()
-        self.n_methods = len(self.criteria)
-        self.joint_loss_transition = np.float("nan")  * np.ones([self.convolution_max + 1, self.component_max + 1, self.loop_max, 2])
-        self.elapsed_time = np.float("nan")  * np.ones([self.convolution_max + 1, self.component_max + 1, self.loop_max, 2])
-        self.loop_cnt_result = np.float("nan") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.divergence_result = np.float("inf") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.activation_loss_result = np.float("inf") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.base_loss_result = np.float("inf") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.joint_loss_result = np.float("inf") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.completion_result = np.float("nan") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.activation_result = [[None for col in range(self.component_max + 1)] for row in range(self.convolution_max + 1)]
-        self.base_result = [[None for col in range(self.component_max + 1)] for row in range(self.convolution_max + 1)]
-        self.approximation_result = [[None for col in range(self.component_max + 1)] for row in range(self.convolution_max + 1)]
-        convolution_range = []
-        if self.convolution_max is None:
-            if self.true_width is None:
-                self.convolution_max = 10
-            else:
-                self.convolution_max = self.true_width
-        if self.true_width is None:
-            convolution_range = range(1, self.convolution_max + 1)
-        else:
-            convolution_range = [self.true_width]
-        component_range = []
-        if self.true_n_components is None:
-            component_range = range(1, self.component_max + 1)
-        else:
-            component_range = [self.true_n_components]
-        # print("convolution_range", convolution_range)
-        for convolution_width in convolution_range:
-            for n_components in component_range:
-                # print("n_components", n_components)
-                (activation, base, _, _, _)\
-                    = self._factorize(X, n_components, convolution_width, filtre)
-                self.activation_result[convolution_width][n_components] = activation
-                self.base_result[convolution_width][n_components] = base
-                self.approximation_result[convolution_width][n_components] = self.convolute(activation, base)
-                activation_loss = self._activation_loss(activation)
-                base_loss = self._base_loss(base)
-                divergence = self._divergence(X, activation, base, filtre)
-                self.activation_loss_result[convolution_width][n_components] = activation_loss
-                self.base_loss_result[convolution_width][n_components] = base_loss
-                self.divergence_result[convolution_width][n_components] = divergence
-                joint_loss = divergence + activation_loss + base_loss
-                self.joint_loss_result[convolution_width][n_components] = joint_loss
-                self._compute_criterion(divergence, activation_loss, convolution_width, n_components)
-                self.completion_result[convolution_width, n_components]\
-                = self._evaluate_completion(X, activation, base)
-                if self.verbose >= 1:
-                    print('n_components', n_components, 'convolution_width', convolution_width, 'divergence', divergence, 'joint_loss', joint_loss)
-        self._summarize_result()
-
-    def _summarize_result(self):
-        for criterion in self.criteria:
-            criterion.conclude(self.activation_result, self.base_result, self.completion_result)
-        self.activation = self.criteria[-1].best_activation
-        self.base = self.criteria[-1].best_base
-        self.approximated = self.convolute(self.activation, self.base)
+        self.joint_loss_transition = np.full((self.loop_max, 2), np.nan)
+        self.elapsed_time_transition = np.full((self.loop_max, 2), np.nan)
+        (signal, response, joint_loss_transition, elapsed_time_transition, final_loop_cnt) \
+            = self._factorize(X, self.n_components, self.convolution_width, filtre)
+        self.signal = signal
+        self.response = response
+        self.approximate = self.convolute(signal, response)
+        self.signal_loss = self._signal_loss(signal)
+        self.response_loss = self._response_loss(response)
+        self.divergence = self._divergence(X, signal, response, filtre)
+        self.joint_loss = self.divergence + self.signal_loss + self.response_loss
+        self.completion_quality = self._evaluate_completion(X, signal, response)
+        if self.verbose >= 1:
+            print('n_components', self.n_components, 'convolution_width', self.convolution_width, 'divergence', self.divergence,
+                  'joint_loss', self.joint_loss)
 
     def _factorize(self, X, n_components, convolution_width, filtre):
         if filtre is None:
@@ -142,6 +73,9 @@ class VirtualCMF(object, metaclass=ABCMeta):
 
     def _multiplicative_update(self, X, n_components, convolution_width, filtre):
         (activation, base) = self._init_activation_base(X, n_components, convolution_width, filtre)
+        joint_loss_transition = np.full((self.loop_max, 2), np.nan)
+        elapsed_time_transition = np.full((self.loop_max, 2), np.nan)
+        final_loop_cnt = None
         previous_loss = np.float("inf")
         loop_cnt = self.loop_max
         time_origin = time.time()
@@ -150,28 +84,28 @@ class VirtualCMF(object, metaclass=ABCMeta):
         for loop_idx in range(0, self.loop_max):
             new_activation = self._update_activation(X, activation, base, filtre, accelerator[loop_idx])
             present_loss = self._joint_loss(X, new_activation, base, filtre)
-            self.joint_loss_transition[convolution_width, n_components, loop_idx, 0] = present_loss
+            joint_loss_transition[loop_idx, 0] = present_loss
             elapsed_time = time.time() - time_origin
-            self.elapsed_time[convolution_width, n_components, loop_idx, 0] = elapsed_time
+            elapsed_time_transition[loop_idx, 0] = elapsed_time
             if self.verbose >= 2:
                 print('loop_idx', loop_idx, 'accelerator', accelerator[loop_idx], 'elapsed_time', elapsed_time, 'joint_loss', present_loss)
             new_base = self._update_base(X, new_activation, base, filtre, accelerator[loop_idx])
             present_loss = self._joint_loss(X, new_activation, new_base, filtre)
-            self.joint_loss_transition[convolution_width, n_components, loop_idx, 1] = present_loss
+            joint_loss_transition[loop_idx, 1] = present_loss
             elapsed_time = time.time() - time_origin
-            self.elapsed_time[convolution_width, n_components, loop_idx, 1] = elapsed_time
+            elapsed_time_transition[loop_idx, 1] = elapsed_time
             if self.verbose >= 2:
                 print('loop_idx', loop_idx, 'accelerator', accelerator[loop_idx], 'elapsed_time', elapsed_time, 'joint_loss', present_loss)
             if np.isinf(present_loss):
                 pdb.set_trace()
             if self._is_converged(present_loss, previous_loss, loop_idx) and loop_idx > self.loop_min:
                 loop_cnt = loop_idx
-                self.loop_cnt_result[convolution_width, n_components] = loop_cnt
+                final_loop_cnt = loop_cnt
                 break
             previous_loss = present_loss
             base = new_base
             activation = new_activation
-        return (activation, base, self.joint_loss_transition[convolution_width, n_components, :, :], self.elapsed_time[convolution_width, n_components, :, :], loop_cnt)
+        return (activation, base, joint_loss_transition, elapsed_time_transition, final_loop_cnt)
 
     def transform(self, X, filtre = None):
         self._transform(X, transform_filtre=filtre)
@@ -211,8 +145,8 @@ class VirtualCMF(object, metaclass=ABCMeta):
                     = self._transform_factorize(X, n_components, convolution_width, transform_filtre)
                 self.transform_activation_result[convolution_width][n_components] = activation
                 self.transform_approximation_result[convolution_width][n_components] = self.convolute(activation, base)
-                activation_loss = self._activation_loss(activation)
-                base_loss = self._base_loss(base)
+                activation_loss = self._signal_loss(activation)
+                base_loss = self._response_loss(base)
                 divergence = self._divergence(X, activation, base, transform_filtre)
                 self.transform_activation_loss_result[convolution_width][n_components] = activation_loss
                 self.transform_divergence_result[convolution_width][n_components] = divergence
@@ -256,7 +190,7 @@ class VirtualCMF(object, metaclass=ABCMeta):
                 pdb.set_trace()
             if self._is_converged(present_loss, previous_loss, loop_idx) and loop_idx > self.loop_min:
                 loop_cnt = loop_idx
-                self.loop_cnt_result[convolution_width, n_components] = loop_cnt
+                self.final_loop_cnt[convolution_width, n_components] = loop_cnt
                 break
             previous_loss = present_loss
             activation = new_activation
@@ -313,17 +247,17 @@ class VirtualCMF(object, metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def _activation_loss(self, activation):
+    def _signal_loss(self, activation):
         raise NotImplementedError()
 
     @abstractmethod
-    def _base_loss(self, base):
+    def _response_loss(self, base):
         raise NotImplementedError()
 
     def _joint_loss(self, X, activation, base, filtre = None):
         if filtre is None:
             filtre = np.ones(X.shape)
-        return self._divergence(X, activation, base, filtre) + self._activation_loss(activation) + self._base_loss(base)
+        return self._divergence(X, activation, base, filtre) + self._signal_loss(activation) + self._response_loss(base)
 
     def _vec_input_joint_loss(self, param_vec, X, n_components, convolution_width, filtre = None):
         (K,M) = (n_components, convolution_width)

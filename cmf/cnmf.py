@@ -135,12 +135,12 @@ class CNMF(VirtualCMF):
         Z = solve(((Th0) @ Th0.T + SMALL_NUM * np.identity(K)).T, (((F * new_X)) @ Th0.T).T).T
         return np.abs(Z)
 
-    def _activation_loss(self, activation):
+    def _signal_loss(self, activation):
         activation[activation <= 0.0] = np.finfo(float).eps
         (T, K) = activation.shape
         return - ((self.gamma_shape - 1) * np.log(activation)).sum() + (self.gamma_rate * activation).sum() + K * T * (- self.gamma_shape * np.log(self.gamma_rate) + special.gammaln(self.gamma_shape))
 
-    def _base_loss(self, base):
+    def _response_loss(self, base):
         return 0.0
 
     def _divergence(self, X, activation, base, filtre=None):

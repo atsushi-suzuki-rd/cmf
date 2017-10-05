@@ -172,11 +172,11 @@ class CMFPN(VirtualCMF):
             NewTh[m, :, :] = np.abs(Th[m, :, :]) * self.shrink((np.abs(raw_numerator) ** accelerator) * np.sign(raw_numerator), Kp) / ((np.abs(raw_denominator) ** accelerator) * np.sign(raw_denominator) + SMALL_NUM * np.ones(Th[m, :, :].shape))
         return NewTh
 
-    def _activation_loss(self, activation):
+    def _signal_loss(self, activation):
         Z = activation
         return self.activation_l1_weight * np.sum(np.abs(Z)) + self.activation_l2_weight * np.sum(Z * Z)
 
-    def _base_loss(self, base):
+    def _response_loss(self, base):
         Th = base
         return np.sum(np.abs(Th) * self.base_l1_weight) + np.sum(Th * Th * self.base_l2_weight)
 
