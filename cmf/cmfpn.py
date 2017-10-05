@@ -9,6 +9,10 @@ import pdb
 
 
 class CMFPN(VirtualCMF):
+
+    SIGNAL_BOUND = (None, None)
+    RESPONSE_BOUND = (None, None),
+
     def __init__(self,
                  convolution_max = None, true_width = None,
                  component_max = None, true_n_components = None,
@@ -45,7 +49,7 @@ class CMFPN(VirtualCMF):
             self.loss_weight = loss_weight
         if base_l2_weight is None:
             # self.base_l2_weight = np.mean(X * X, axis=0)
-            self.base_l1_weight = np.ones(X.shape[1])
+            self.base_l2_weight = np.ones(X.shape[1])
         else:
             if base_l2_weight.shape[0] != X.shape[1]:
                 raise ValueError('base_l2_weight.shape[0] != X.shape[1]')
@@ -61,11 +65,11 @@ class CMFPN(VirtualCMF):
     def _prepare_special_criteria(self):
         pass
 
-    def _init_activation_base(self, X, n_components, convolution_width, filtre):
+    def _init_signal_response(self, X, filtre):
         (T, Om) = X.shape
         F = filtre
-        K = n_components
-        M = convolution_width
+        K = self.n_components
+        M = self.convolution_width
         if self.initialization == 'impulse_svd':
             Th = np.zeros([M, K, Om])
             U, s, V = np.linalg.svd(F * X, full_matrices=True)
@@ -78,14 +82,14 @@ class CMFPN(VirtualCMF):
             Th0 = s[:K][:, np.newaxis] * V[:K, :]
             Th = np.ones([M, 1, 1]) * Th0
         elif self.initialization == 'impulse_ica':
-            ica = FastICA(n_components=n_components)
+            ica = FastICA(n_components=K)
             Z = ica.fit_transform(X)
             Th0 = ica.mixing_.T
             SMALL_NUM = 10 * np.finfo(float).eps
             Th = np.ones([M, K, Om]) * SMALL_NUM
             Th[0, :, :] = Th0
         elif self.initialization == 'smooth_ica':
-            ica = FastICA(n_components=n_components)
+            ica = FastICA(n_components=K)
             Z_raw = self.reverse_time_shift(ica.fit_transform(X), M//2)
             Z_scale = np.mean(Z_raw*Z_raw, axis = 0)
             Z = Z_raw / Z_scale[np.newaxis, :]
@@ -96,26 +100,20 @@ class CMFPN(VirtualCMF):
             Th = np.random.uniform(-1.0, 1.0, [M, K, Om])
         return (Z, Th)
 
-    def _init_activation_for_transform(self, W, base, n_components, convolution_width, filtre):
-        (T, Om) = W.shape
-        K = n_components
+    def _init_signal_for_transform(self, X, response, filtre):
+        (T, Om) = X.shape
+        K = self.n_components
         F = filtre
-        Th = base
+        Th = response
         lb = self.loss_weight
         Th0 = Th[0, :, :]
         SMALL_NUM = np.finfo(float).eps
-        Z = solve(((Th0 * lb) @ Th0.T + SMALL_NUM * np.identity(K)).T, (((F * W) * lb) @ Th0.T).T).T
+        Z = solve(((Th0 * lb) @ Th0.T + SMALL_NUM * np.identity(K)).T, (((F * X) * lb) @ Th0.T).T).T
         return Z
 
-    # def _init_activation(self, X, n_components):
-    #     return np.random.normal(0.0, 1.0 + self.activation_l2_weight, [self.n_samples, n_components])
-
-    # def _init_base(self, X, n_components, convolution_width):
-    #     return np.random.normal(0.0, 1.0 + np.ones([convolution_width, n_components, self.data_dim]) * self.base_l2_weight[np.newaxis, np.newaxis, :], [convolution_width, n_components, self.data_dim])
-
-    def _update_activation(self, X, activation, base, filtre, accelerator = 1.0):
-        Z = activation
-        Th = base
+    def _update_signal(self, X, signal, response, filtre, accelerator = 1.0):
+        Z = signal
+        Th = response
         (T, Om) = X.shape
         (M, K, Om) = Th.shape
         F = filtre
@@ -133,25 +131,10 @@ class CMFPN(VirtualCMF):
         raw_numerator = FXXiLTh + FHLTh * np.sign(Z)
         raw_denominator = FHLTh + Sg * np.abs(Z)
         return np.abs(Z) * self.shrink((np.abs(raw_numerator) ** accelerator) * np.sign(raw_numerator), Rh) / (((np.abs(raw_denominator) ** accelerator) * np.sign(raw_denominator)) + SMALL_NUM * np.ones(Z.shape))
-        # halfA = K * M * self.reverse_convolute(F @ np.diag(1.0 / (self.sigma * self.sigma)), (Th * Th).transpose(0, 2, 1))
-        # negative_half_B = - bt * np.ones([T, K]) + self.reverse_convolute(((F * (X - Xi)) @ np.diag(1.0 / (self.sigma * self.sigma))), Th.transpose(0, 2, 1)) + halfA * Z
-        # C = - (al - 1) * np.ones([T, K])
-        # D_quarter = negative_half_B * negative_half_B - 2 * halfA * C
-        # numerator = negative_half_B + np.sqrt(D_quarter)
-        # denominator = 2 * halfA
-        # return numerator / denominator
 
-    # def _calculate_p_ut(self, Th, F, u, t):
-    #     (T, Om) = self.X.shape
-    #     (M, K, Om) = Th.shape
-    #     P_ut_M = np.zeros([M, K, K])
-    #     for m in range(max([t-u,u-t]), min([M+u-t,M+t-u,T-t])):
-    #         P_ut_M[m,:,:] = Th[m+t-u, :, :] @ np.diag(F[t+m,:]) @ Th[m, :, :].T
-    #     return P_ut_M.sum(axis=0)
-
-    def _update_base(self, X, activation, base, filtre, accelerator = 1.0):
-        Z = activation
-        Th = base
+    def _update_response(self, X, signal, response, filtre, accelerator = 1.0):
+        Z = signal
+        Th = response
         NewTh = np.array(Th)
         (T, Om) = X.shape
         (M, K, Om) = Th.shape
@@ -172,12 +155,12 @@ class CMFPN(VirtualCMF):
             NewTh[m, :, :] = np.abs(Th[m, :, :]) * self.shrink((np.abs(raw_numerator) ** accelerator) * np.sign(raw_numerator), Kp) / ((np.abs(raw_denominator) ** accelerator) * np.sign(raw_denominator) + SMALL_NUM * np.ones(Th[m, :, :].shape))
         return NewTh
 
-    def _signal_loss(self, activation):
-        Z = activation
+    def _signal_loss(self, signal):
+        Z = signal
         return self.activation_l1_weight * np.sum(np.abs(Z)) + self.activation_l2_weight * np.sum(Z * Z)
 
-    def _response_loss(self, base):
-        Th = base
+    def _response_loss(self, response):
+        Th = response
         return np.sum(np.abs(Th) * self.base_l1_weight) + np.sum(Th * Th * self.base_l2_weight)
 
     def _divergence(self, X, activation, base, filtre=None):

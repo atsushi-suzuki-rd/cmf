@@ -7,6 +7,6 @@ import pdb
 
 class ScipyCMFPN(CMFPN):
     def _factorize(self, X, n_components, convolution_width, filtre):
-        return self._scipy_update(X, n_components, convolution_width, filtre, activation_bound = (0, None), base_bound = (None, None))
+        return self._scipy_update(X, n_components, convolution_width, filtre, signal_bound= (0, None), response_bound= (None, None))
 
 

@@ -11,6 +11,10 @@ import pdb
 
 
 class CNMF(VirtualCMF):
+
+    SIGNAL_BOUND = (0, None)
+    RESPONSE_BOUND = (0, None),
+
     def __init__(self,
                  convolution_max=None, true_width=None,
                  component_max=None, true_n_components=None,
@@ -32,32 +36,12 @@ class CNMF(VirtualCMF):
         self.gamma_rate = gamma_rate
         self.initialization = initialization
         self.base_max = base_max
-        self.bias = 0.0
+        self.bias = bias
 
-    def _prepare_special_criteria(self):
-        opt_dict = dict(
-            name = 'NML with LVC' ,
-            convolution_max = self.convolution_max,
-            component_max = self.component_max,
-            gamma_shape = self.gamma_shape,
-            gamma_rate = self.gamma_rate,
-            base_max = self.base_max)
-        self.criteria.append(CNIMFLVCNML(**opt_dict))
-
-    def fit(self, X, y = None, filtre = None):
-        X = X.astype(np.float64)
-        self._fit(X, y, filtre)
-
-    def _init_activation(self, n_components):
-        return np.random.gamma(self.gamma_shape, 1.0 / self.gamma_rate, [self.n_samples, n_components])
-
-    def _init_base(self, n_components, convolution_width):
-        return np.random.uniform(0.0, self.base_max, [convolution_width, n_components, self.data_dim])
-
-    def _update_activation(self, X, activation, base, filtre, accelerator=None):
-        Z = activation
+    def _update_signal(self, X, signal, response, filtre, accelerator=None):
+        Z = signal
         Z[Z<np.finfo(float).eps] = np.finfo(float).eps
-        Th = base
+        Th = response
         Th[Th<np.finfo(float).eps] = np.finfo(float).eps
         (T, Om) = X.shape
         (M, K, Om) = Th.shape
@@ -71,10 +55,10 @@ class CNMF(VirtualCMF):
         newZ[newZ<np.finfo(float).eps] = np.finfo(float).eps
         return newZ
 
-    def _update_base(self, X, activation, base, filtre, accelerator=None):
-        Z = activation
+    def _update_response(self, X, signal, response, filtre, accelerator=None):
+        Z = signal
         Z[Z<np.finfo(float).eps] = np.finfo(float).eps
-        Th = base
+        Th = response
         Th[Th<np.finfo(float).eps] = np.finfo(float).eps
         NewTh = np.array(Th)
         (T, Om) = X.shape
@@ -90,11 +74,11 @@ class CNMF(VirtualCMF):
         NewTh[NewTh<np.finfo(float).eps] = np.finfo(float).eps
         return NewTh
 
-    def _init_activation_base(self, X, n_components, convolution_width, filtre):
+    def _init_signal_response(self, X, filtre):
         (T, Om) = X.shape
         F = filtre
-        K = n_components
-        M = convolution_width
+        K = self.n_components
+        M = self.convolution_width
         if self.initialization == 'impulse_svd':
             Th = np.zeros([M, K, Om])
             U, s, V = np.linalg.svd(F * X, full_matrices=True)
@@ -107,14 +91,14 @@ class CNMF(VirtualCMF):
             Th0 = s[:K][:, np.newaxis] * V[:K, :]
             Th = np.ones([M, 1, 1]) * Th0
         elif self.initialization == 'impulse_ica':
-            ica = FastICA(n_components=n_components)
+            ica = FastICA(n_components=K)
             Z = ica.fit_transform(X)
             Th0 = ica.mixing_.T
             SMALL_NUM = 10 * np.finfo(float).eps
             Th = np.ones([M, K, Om]) * SMALL_NUM
             Th[0, :, :] = Th0
         elif self.initialization == 'smooth_ica':
-            ica = FastICA(n_components=n_components)
+            ica = FastICA(n_components=K)
             Z_raw = self.reverse_time_shift(ica.fit_transform(X), M//2)
             Z_scale = np.mean(Z_raw*Z_raw, axis = 0)
             Z = Z_raw / Z_scale[np.newaxis, :]
@@ -125,22 +109,22 @@ class CNMF(VirtualCMF):
             Th = np.random.uniform(0.0, self.base_max, [M, K, Om])
         return (np.abs(Z), np.abs(Th))
 
-    def _init_activation_for_transform(self, new_X, base, n_components, convolution_width, filtre):
-        (T, Om) = new_X.shape
-        K = n_components
+    def _init_signal_for_transform(self, X, response, filtre):
+        (T, Om) = X.shape
+        K = self.n_components
         F = filtre
-        Th = base
+        Th = response
         Th0 = Th[0, :, :]
         SMALL_NUM = np.finfo(float).eps
-        Z = solve(((Th0) @ Th0.T + SMALL_NUM * np.identity(K)).T, (((F * new_X)) @ Th0.T).T).T
+        Z = solve(((Th0) @ Th0.T + SMALL_NUM * np.identity(K)).T, (((F * X)) @ Th0.T).T).T
         return np.abs(Z)
 
-    def _signal_loss(self, activation):
-        activation[activation <= 0.0] = np.finfo(float).eps
-        (T, K) = activation.shape
-        return - ((self.gamma_shape - 1) * np.log(activation)).sum() + (self.gamma_rate * activation).sum() + K * T * (- self.gamma_shape * np.log(self.gamma_rate) + special.gammaln(self.gamma_shape))
+    def _signal_loss(self, signal):
+        signal[signal <= 0.0] = np.finfo(float).eps
+        (T, K) = signal.shape
+        return - ((self.gamma_shape - 1) * np.log(signal)).sum() + (self.gamma_rate * signal).sum() + K * T * (- self.gamma_shape * np.log(self.gamma_rate) + special.gammaln(self.gamma_shape))
 
-    def _response_loss(self, base):
+    def _response_loss(self, response):
         return 0.0
 
     def _divergence(self, X, activation, base, filtre=None):

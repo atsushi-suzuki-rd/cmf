@@ -15,11 +15,12 @@ from cmf.lvc_bic import LVCBIC
 import pdb
 
 class VirtualCMF(object, metaclass=ABCMeta):
+
     def __init__(self,
                  convolution_width,
                  n_components,
                  convergence_threshold = 0.0001, loop_max = 1000, loop_min = 0,
-                 fit_accelerator_max = 0.0, transform_accelerator_max = 0.0, verbose = 0):
+                 fit_accelerator_max = 0.0, transform_accelerator_max = 0.0, method = 'mu', verbose = 0):
         self.n_components = n_components
         self.convolution_width = convolution_width
         self.loop_max = loop_max
@@ -38,12 +39,32 @@ class VirtualCMF(object, metaclass=ABCMeta):
         self.response = None
         self.approximate = None
         self.completion_quality = None
+        self.method = method
 
-    def fit(self, X, filtre = None):
-        self._fit(X, filtre)
+    def fit(self, X, filtre=None):
+        self._fit_transform(X, filtre)
 
-    def _fit(self, X, filtre = None):
+    def fit_transform(self, X, filtre=None):
+        return self._fit_transform(X, filtre)
+
+    def transform(self, X, filtre=None):
+        return self._transform(X, filtre)
+
+    def _fit_transform(self, X, filtre = None):
+        self._factorize(X, filtre, mode='fit')
+        return self.signal
+
+    def _transform(self, X, filtre = None):
+        self._factorize(X, filtre, mode='transform')
+        return self.signal
+
+    def _preprocess_input(self, X):
+        return X
+
+    def _factorize(self, X, filtre, mode):
+        X = X.astype(np.float64)
         self.X = X
+        X = self._preprocess_input(X)
         if filtre is None:
             self.filtre = np.ones(X.shape)
         else:
@@ -52,29 +73,32 @@ class VirtualCMF(object, metaclass=ABCMeta):
         (self.n_samples, self.data_dim) = X.shape
         self.joint_loss_transition = np.full((self.loop_max, 2), np.nan)
         self.elapsed_time_transition = np.full((self.loop_max, 2), np.nan)
-        (signal, response, joint_loss_transition, elapsed_time_transition, final_loop_cnt) \
-            = self._factorize(X, self.n_components, self.convolution_width, filtre)
+        if self.method == 'mu':
+            (signal, response, _, _, final_loop_cnt) = self._multiplicative_update(X, filtre, mode)
+        elif self.method == 'bfgs':
+            (signal, response, _, _, final_loop_cnt) = self._scipy_update(X, filtre, mode)
         self.signal = signal
-        self.response = response
+        if mode == 'fit':
+            self.response = response
         self.approximate = self.convolute(signal, response)
         self.signal_loss = self._signal_loss(signal)
         self.response_loss = self._response_loss(response)
         self.divergence = self._divergence(X, signal, response, filtre)
         self.joint_loss = self.divergence + self.signal_loss + self.response_loss
         self.completion_quality = self._evaluate_completion(X, signal, response)
+        self.final_loop_cnt = final_loop_cnt
         if self.verbose >= 1:
             print('n_components', self.n_components, 'convolution_width', self.convolution_width, 'divergence', self.divergence,
                   'joint_loss', self.joint_loss)
 
-    def _factorize(self, X, n_components, convolution_width, filtre):
-        if filtre is None:
-            filtre = np.ones(X.shape)
-        return self._multiplicative_update(X, n_components, convolution_width, filtre)
-
-    def _multiplicative_update(self, X, n_components, convolution_width, filtre):
-        (activation, base) = self._init_activation_base(X, n_components, convolution_width, filtre)
-        joint_loss_transition = np.full((self.loop_max, 2), np.nan)
-        elapsed_time_transition = np.full((self.loop_max, 2), np.nan)
+    def _multiplicative_update(self, X, filtre, mode):
+        if mode == 'fit':
+            (signal, response) = self._init_signal_response(X, filtre)
+        elif mode == 'transform':
+            response = self.response
+            signal = self._init_signal_for_transform(X, response, filtre)
+        else:
+            pdb.set_trace()
         final_loop_cnt = None
         previous_loss = np.float("inf")
         loop_cnt = self.loop_max
@@ -82,18 +106,23 @@ class VirtualCMF(object, metaclass=ABCMeta):
         accelerator_max = self.fit_accelerator_max
         accelerator = 10. ** (accelerator_max / loop_cnt * np.arange(0.0, loop_cnt)[::-1])
         for loop_idx in range(0, self.loop_max):
-            new_activation = self._update_activation(X, activation, base, filtre, accelerator[loop_idx])
-            present_loss = self._joint_loss(X, new_activation, base, filtre)
-            joint_loss_transition[loop_idx, 0] = present_loss
+            new_signal = self._update_signal(X, signal, response, filtre, accelerator[loop_idx])
+            present_loss = self._joint_loss(X, new_signal, response, filtre)
+            self.joint_loss_transition[loop_idx, 0] = present_loss
             elapsed_time = time.time() - time_origin
-            elapsed_time_transition[loop_idx, 0] = elapsed_time
+            self.elapsed_time_transition[loop_idx, 0] = elapsed_time
             if self.verbose >= 2:
                 print('loop_idx', loop_idx, 'accelerator', accelerator[loop_idx], 'elapsed_time', elapsed_time, 'joint_loss', present_loss)
-            new_base = self._update_base(X, new_activation, base, filtre, accelerator[loop_idx])
-            present_loss = self._joint_loss(X, new_activation, new_base, filtre)
-            joint_loss_transition[loop_idx, 1] = present_loss
+            if mode == 'fit':
+                new_response = self._update_response(X, new_signal, response, filtre, accelerator[loop_idx])
+            elif mode == 'transform':
+                new_response = response
+            else:
+                pdb.set_trace()
+            present_loss = self._joint_loss(X, new_signal, new_response, filtre)
+            self.joint_loss_transition[loop_idx, 1] = present_loss
             elapsed_time = time.time() - time_origin
-            elapsed_time_transition[loop_idx, 1] = elapsed_time
+            self.elapsed_time_transition[loop_idx, 1] = elapsed_time
             if self.verbose >= 2:
                 print('loop_idx', loop_idx, 'accelerator', accelerator[loop_idx], 'elapsed_time', elapsed_time, 'joint_loss', present_loss)
             if np.isinf(present_loss):
@@ -103,176 +132,93 @@ class VirtualCMF(object, metaclass=ABCMeta):
                 final_loop_cnt = loop_cnt
                 break
             previous_loss = present_loss
-            base = new_base
-            activation = new_activation
-        return (activation, base, joint_loss_transition, elapsed_time_transition, final_loop_cnt)
+            response = new_response
+            signal = new_signal
+        return (signal, response, self.joint_loss_transition, self.elapsed_time_transition, final_loop_cnt)
 
-    def transform(self, X, filtre = None):
-        self._transform(X, transform_filtre=filtre)
-
-    def _transform(self, X, transform_filtre = None):
-        self.new_X = X
-        if transform_filtre is None:
-            self.transform_filtre = np.ones(X.shape)
+    def _scipy_update(self, X, filtre, mode=None):
+        signal_bound = self.signal_bound
+        response_bound = self.response_bound
+        if mode == 'fit':
+            (signal, response) = self._init_signal_response(X, filtre)
+            param_vec = self._param_mat2vec(signal, response)
+            obj_fun = partial(self._vec_input_joint_loss, **{'X': X, 'filtre': filtre})
+            callback = CallbackForScipy(obj_fun, self.loop_max)
+            bounds = [signal_bound for i in range(np.prod(signal.shape))] + [response_bound for i in range(np.prod(response.shape))]
+            res = minimize(obj_fun, param_vec, bounds = bounds, callback=callback, options={'maxiter': self.loop_max}, tol = self.convergence_threshold)
+            (signal, response) = self._vec2param_mat(res['x'])
+        elif mode == 'transform':
+            response = self.response
+            signal = self._init_signal_for_transform(X, response, filtre)
+            signal_vec = self._signal2vec(signal)
+            obj_fun = partial(self._signal_vec_input_joint_loss, **{'X': X, 'response': response, 'filtre': filtre})
+            callback = CallbackForScipy(obj_fun, self.loop_max)
+            bounds = [signal_bound for i in range(np.prod(signal.shape))]
+            res = minimize(obj_fun, signal_vec, bounds = bounds, callback=callback, options={'maxiter': self.loop_max}, tol = self.convergence_threshold)
+            signal = self._vec2signal(res['x'])
         else:
-            self.transform_filtre = transform_filtre
-        transform_filtre = self.transform_filtre
-        (self.n_samples, self.data_dim) = X.shape
-        if self.component_max is None:
-            self.component_max = self.data_dim
-        self.transform_joint_loss_transition = np.float("nan") * np.ones([self.convolution_max + 1, self.component_max + 1, self.loop_max])
-        self.transform_elapsed_time = np.float("nan") * np.ones([self.convolution_max + 1, self.component_max + 1, self.loop_max])
-        self.transform_loop_cnt_result = np.float("nan") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.transform_divergence_result = np.float("inf") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.transform_activation_loss_result = np.float("inf") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.transform_joint_loss_result = np.float("inf") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.transform_completion_result = np.float("nan") * np.ones([self.convolution_max + 1, self.component_max + 1])
-        self.transform_activation_result = [[None for col in range(self.component_max + 1)] for row in range(self.convolution_max + 1)]
-        self.transform_approximation_result = [[None for col in range(self.component_max + 1)] for row in range(self.convolution_max + 1)]
-        convolution_range = []
-        if self.true_width is None:
-            convolution_range = range(1, self.convolution_max + 1)
-        else:
-            convolution_range = [self.true_width]
-        component_range = []
-        if self.true_n_components is None:
-            component_range = range(1, self.component_max + 1)
-        else:
-            component_range = [self.true_n_components]
-        for convolution_width in convolution_range:
-            for n_components in component_range:
-                (activation, base, _, _, _)\
-                    = self._transform_factorize(X, n_components, convolution_width, transform_filtre)
-                self.transform_activation_result[convolution_width][n_components] = activation
-                self.transform_approximation_result[convolution_width][n_components] = self.convolute(activation, base)
-                activation_loss = self._signal_loss(activation)
-                base_loss = self._response_loss(base)
-                divergence = self._divergence(X, activation, base, transform_filtre)
-                self.transform_activation_loss_result[convolution_width][n_components] = activation_loss
-                self.transform_divergence_result[convolution_width][n_components] = divergence
-                joint_loss = divergence + activation_loss + base_loss
-                self.transform_joint_loss_result[convolution_width][n_components] = joint_loss
-                self.transform_completion_result[convolution_width, n_components]\
-                = self._evaluate_completion(X, activation, base)
-                if self.verbose >= 1:
-                    print('n_components', n_components, 'convolution_width', convolution_width, 'divergence', divergence, 'joint_loss', joint_loss)
-        self._summarize_transform()
-
-    def _summarize_transform(self):
-        self.transform_activation = self.transform_activation_result[self.criteria[-1].best_structure[0]][self.criteria[-1].best_structure[1]]
-        self.transform_approximated = self.convolute(self.transform_activation, self.base)
-
-    def _transform_factorize(self, W, n_components, convolution_width, transform_filtre = None):
-        if transform_filtre is None:
-            self.transform_filtre = np.ones(W.shape)
-        else:
-            self.transform_filtre = transform_filtre
-        transform_filtre = self.transform_filtre
-        return self._multiplicative_transform(W, n_components, convolution_width, transform_filtre)
-
-    def _multiplicative_transform(self, W, n_components, convolution_width, transform_filtre):
-        base = self.base_result[convolution_width][n_components]
-        activation = self._init_activation_for_transform(W, base, n_components, convolution_width, transform_filtre)
-        previous_loss = np.float("inf")
-        loop_cnt = self.loop_max
-        time_origin = time.time()
-        accelerator_max = self.transform_accelerator_max
-        accelerator = 10. ** (accelerator_max / loop_cnt * np.arange(0.0, loop_cnt)[::-1])
-        for loop_idx in range(0, self.loop_max):
-            new_activation = self._update_activation(W, activation, base, transform_filtre, accelerator[loop_idx])
-            present_loss = self._joint_loss(W, new_activation, base, transform_filtre)
-            self.transform_joint_loss_transition[convolution_width, n_components, loop_idx] = present_loss
-            elapsed_time = time.time() - time_origin
-            self.transform_elapsed_time[convolution_width, n_components, loop_idx] = elapsed_time
-            if self.verbose >=2:
-                print('loop_idx', loop_idx, 'accelerator', accelerator[loop_idx], 'elapsed_time', elapsed_time, 'joint_loss', present_loss)
-            if np.isinf(present_loss):
-                pdb.set_trace()
-            if self._is_converged(present_loss, previous_loss, loop_idx) and loop_idx > self.loop_min:
-                loop_cnt = loop_idx
-                self.final_loop_cnt[convolution_width, n_components] = loop_cnt
-                break
-            previous_loss = present_loss
-            activation = new_activation
-        return (activation, base, self.transform_joint_loss_transition[convolution_width, n_components, :], self.transform_elapsed_time[convolution_width, n_components, :], loop_cnt)
-
-    def _scipy_update(self, X, n_components, convolution_width, filtre, activation_bound=(None, None), base_bound=(None, None)):
-        (activation, base) = self._init_activation_base(X, n_components, convolution_width, filtre)
-        param_vec = self._param_mat2vec(activation, base)
-        obj_fun = partial(self._vec_input_joint_loss, **{'X': X, 'n_components': n_components, 'convolution_width': convolution_width, 'filtre': filtre})
-        callback = CallbackForScipy(obj_fun, self.loop_max)
-        bounds = [activation_bound for i in range(np.prod(activation.shape))] + [base_bound for i in range(np.prod(base.shape))]
-        res = minimize(obj_fun, param_vec, bounds = bounds, callback=callback, options={'maxiter': self.loop_max}, tol = self.convergence_threshold)
-        (activation, base) = self._vec2param_mat(res['x'], n_components, convolution_width)
-        self.elapsed_time[convolution_width, n_components, :, 0] = callback.elapsed_time
-        self.elapsed_time[convolution_width, n_components, :, 1] = callback.elapsed_time
-        self.joint_loss_transition[convolution_width, n_components, :, 0] = callback.loss_transition
-        self.joint_loss_transition[convolution_width, n_components, :, 1] = callback.loss_transition
-        return (activation, base, None, None, res['nit'])
+            pdb.set_trace()
+        self.elapsed_time_transition[:, 0] = callback.elapsed_time
+        self.elapsed_time_transition[:, 1] = callback.elapsed_time
+        self.joint_loss_transition[:, 0] = callback.loss_transition
+        self.joint_loss_transition[:, 1] = callback.loss_transition
+        return (signal, response, self.joint_loss_transition, self.elapsed_time_transition, res['nit'])
 
     def _is_converged(self, present_loss, previous_loss, loop_idx):
         try:
             (previous_loss - present_loss) / np.abs(present_loss) < self.convergence_threshold
         except RuntimeWarning:
             pdb.set_trace()
-        return  (previous_loss - present_loss) / np.abs(present_loss) < self.convergence_threshold
+        return (previous_loss - present_loss) / np.abs(present_loss) < self.convergence_threshold
 
-    def _compute_criterion(self, divergence, activation_loss, convolution_width, n_components):
-        (n_samples, data_dim) = self.X.shape
-        criterion_value = np.float("inf") * np.ones(self.n_methods)
-        for criterion in self.criteria:
-            criterion.store_result(divergence, activation_loss, n_samples, n_components, data_dim, convolution_width)
-
-    def _evaluate_completion(self, X, activation, base):
-        return self._divergence(X, activation, base, np.ones(X.shape))
+    def _evaluate_completion(self, X, signal, response):
+        return self._divergence(X, signal, response, np.ones(X.shape))
 
     @abstractmethod
-    def _init_activation_base(self, X, n_components, convolution_width, filtre):
+    def _init_signal_response(self, X, filtre):
         raise NotImplementedError()
 
     @abstractmethod
-    def _init_activation_for_transform(self, W, base, n_components, convolution_width, filtre):
+    def _init_signal_for_transform(self, X, response, filtre):
         raise NotImplementedError()
 
     @abstractmethod
-    def _update_activation(self, activation, base):
+    def _update_signal(self, signal, response, filtre, accelerator):
         raise NotImplementedError()
 
     @abstractmethod
-    def _update_base(self, activation, base):
+    def _update_response(self, signal, response, filtre, accelerator):
         raise NotImplementedError()
 
     @abstractmethod
-    def _divergence(self, X, activation, base, filtre = None):
+    def _divergence(self, X, activation, base, filtre=None):
         raise NotImplementedError()
 
     @abstractmethod
-    def _signal_loss(self, activation):
+    def _signal_loss(self, signal):
         raise NotImplementedError()
 
     @abstractmethod
-    def _response_loss(self, base):
+    def _response_loss(self, response):
         raise NotImplementedError()
 
-    def _joint_loss(self, X, activation, base, filtre = None):
+    def _joint_loss(self, X, activation, base, filtre=None):
         if filtre is None:
             filtre = np.ones(X.shape)
         return self._divergence(X, activation, base, filtre) + self._signal_loss(activation) + self._response_loss(base)
 
-    def _vec_input_joint_loss(self, param_vec, X, n_components, convolution_width, filtre = None):
-        (K,M) = (n_components, convolution_width)
+    def _vec_input_joint_loss(self, param_vec, X, filtre=None):
         if filtre is None:
             filtre = np.ones(X.shape)
-        (T, Om) = X.shape
-        (activation, base) = self._vec2param_mat(param_vec, K, M)
-        return self._joint_loss(X, activation, base, filtre)
+        (signal, response) = self._vec2param_mat(param_vec)
+        return self._joint_loss(X, signal, response, filtre)
 
-    def _vec2param_mat(self, param_vec, n_components, convolution_width):
-        (K,M) = (n_components, convolution_width)
+    def _vec2param_mat(self, param_vec):
+        (K, M) = (self.n_components, self.convolution_width)
         (T, Om) = self.X.shape
-        activation = param_vec[:T*K].reshape([T,K])
-        base = param_vec[T*K:].reshape([M,K,Om])
-        return (activation, base)
+        signal = param_vec[:T*K].reshape([T,K])
+        response = param_vec[T*K:].reshape([M,K,Om])
+        return (signal, response)
 
     def _param_mat2vec(self, activation, base):
         (T, Om) = self.X.shape
@@ -281,6 +227,24 @@ class VirtualCMF(object, metaclass=ABCMeta):
         param_vec[:T*K] = activation.reshape([T*K])
         param_vec[T*K:] = base.reshape([M*K*Om])
         return param_vec
+
+    def _signal_vec_input_joint_loss(self, signal_vec, X, response, filtre=None):
+        if filtre is None:
+            filtre = np.ones(X.shape)
+        signal = self._vec2signal(signal_vec)
+        return self._joint_loss(X, signal, response, filtre)
+
+    def _vec2signal(self, signal_vec):
+        (K, M) = (self.n_components, self.convolution_width)
+        (T, Om) = self.X.shape
+        signal = signal_vec.reshape([T, K])
+        return signal
+
+    def _signal2vec(self, signal):
+        (K, M) = (self.n_components, self.convolution_width)
+        (T, Om) = self.X.shape
+        signal_vec = signal.reshape([T * K])
+        return signal_vec
 
     @classmethod
     def time_shift(cls, mat, time):
