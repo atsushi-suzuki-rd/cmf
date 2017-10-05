@@ -16,21 +16,24 @@ class CNMF(VirtualCMF):
     RESPONSE_BOUND = (0, None),
 
     def __init__(self,
-                 convolution_max=None, true_width=None,
-                 component_max=None, true_n_components=None,
+                 convolution_width,
+                 n_components,
                  convergence_threshold=0.0001, loop_max=1000, loop_min=0,
                  gamma_shape=2.0, gamma_rate=2.0,
-                 base_max=10.0, initialization='smooth_svd', bias=0.0,
+                 fit_accelerator_max=0.0, transform_accelerator_max=0.0,
+                 initialization='smooth_svd', bias=0.0,
+                 method='mu',
                  verbose=0):
 
         super().__init__(**dict(
-            convolution_max=convolution_max,
-            true_width=true_width,
-            component_max=component_max,
-            true_n_components=true_n_components,
+            convolution_width=convolution_width,
+            n_components=n_components,
             convergence_threshold=convergence_threshold,
             loop_max=loop_max,
             loop_min=loop_min,
+            fit_accelerator_max=fit_accelerator_max,
+            transform_accelerator_max=transform_accelerator_max,
+            method=method,
             verbose=verbose))
         self.gamma_shape = gamma_shape
         self.gamma_rate = gamma_rate

@@ -94,16 +94,17 @@ class VirtualCMF(object, metaclass=ABCMeta):
     def _multiplicative_update(self, X, filtre, mode):
         if mode == 'fit':
             (signal, response) = self._init_signal_response(X, filtre)
+            accelerator_max = self.fit_accelerator_max
         elif mode == 'transform':
             response = self.response
             signal = self._init_signal_for_transform(X, response, filtre)
+            accelerator_max = self.transform_accelerator_max
         else:
             pdb.set_trace()
         final_loop_cnt = None
         previous_loss = np.float("inf")
         loop_cnt = self.loop_max
         time_origin = time.time()
-        accelerator_max = self.fit_accelerator_max
         accelerator = 10. ** (accelerator_max / loop_cnt * np.arange(0.0, loop_cnt)[::-1])
         for loop_idx in range(0, self.loop_max):
             new_signal = self._update_signal(X, signal, response, filtre, accelerator[loop_idx])

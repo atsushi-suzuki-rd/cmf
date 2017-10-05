@@ -14,31 +14,28 @@ class CMFPN(VirtualCMF):
     RESPONSE_BOUND = (None, None),
 
     def __init__(self,
-                 convolution_max = None, true_width = None,
-                 component_max = None, true_n_components = None,
-                 convergence_threshold = 0.0001, loop_max = 1000, loop_min = 0,
-                 activation_l1_weight = 2.0, activation_l2_weight = 2.0,
-                 base_max = 10.0,
-                 fit_accelerator_max = 0.0,
-                 transform_accelerator_max = 0.0,
-                 initialization = 'smooth_svd',
-                 verbose = 0):
+                 convolution_width,
+                 n_components,
+                 convergence_threshold=0.0001, loop_max=1000, loop_min=0,
+                 activation_l1_weight=2.0, activation_l2_weight=2.0,
+                 fit_accelerator_max=0.0, transform_accelerator_max=0.0,
+                 initialization='smooth_svd',
+                 method='mu',
+                 verbose=0):
 
         super().__init__(**dict(
-            convolution_max = convolution_max,
-            true_width = true_width,
-            component_max = component_max,
-            true_n_components = true_n_components,
-            convergence_threshold = convergence_threshold,
-            loop_max = loop_max,
-            loop_min = loop_min,
-            verbose = verbose,
-            fit_accelerator_max = fit_accelerator_max,
-            transfer_accelerator_max = transform_accelerator_max))
+            convolution_width=convolution_width,
+            n_components=n_components,
+            convergence_threshold=convergence_threshold,
+            loop_max=loop_max,
+            loop_min=loop_min,
+            verbose=verbose,
+            fit_accelerator_max=fit_accelerator_max,
+            transform_accelerator_max=transform_accelerator_max,
+            method=method))
         self.activation_l1_weight = np.array(activation_l1_weight)
         self.activation_l2_weight = np.array(activation_l2_weight)
         self.initialization = initialization
-        self.base_max = base_max
 
     def fit(self, X, filtre = None, loss_weight = None, base_l1_weight = None, base_l2_weight = None):
         if loss_weight is None:
