@@ -53,6 +53,10 @@ class VirtualCMF(object, metaclass=ABCMeta):
     def transform(self, X, filtre=None):
         return self._transform(X, filtre)
 
+    def inverse_transform(self, signal):
+        X = self.convolute(signal, self.response)
+        return self._postprocess_output(X)
+
     def _fit_transform(self, X, filtre = None):
         self._factorize(X, filtre, mode='fit')
         return self.signal
@@ -62,6 +66,9 @@ class VirtualCMF(object, metaclass=ABCMeta):
         return self.signal
 
     def _preprocess_input(self, X):
+        return X
+
+    def _postprocess_output(self, X):
         return X
 
     def _check_input(self, X):
@@ -278,35 +285,35 @@ class VirtualCMF(object, metaclass=ABCMeta):
             return np.pad(tensor, ((0,-time),(0,0),(0,0)), mode='constant')[-time:, :, :]
 
     @classmethod
-    def convolute(cls, activation, base):
-        convolution_width = base.shape[0]
-        ans = activation @ base[0,:,:]
+    def convolute(cls, signal, response):
+        convolution_width = response.shape[0]
+        ans = signal @ response[0, :, :]
         for i_convolution in range(1, convolution_width):
-            ans += cls.time_shift(activation, i_convolution) @ base[i_convolution, :, :]
+            ans += cls.time_shift(signal, i_convolution) @ response[i_convolution, :, :]
         return ans
 
     @classmethod
-    def reverse_convolute(cls, activation, base):
-        convolution_width = base.shape[0]
-        ans = activation @ base[0,:,:]
+    def reverse_convolute(cls, signal, response):
+        convolution_width = response.shape[0]
+        ans = signal @ response[0, :, :]
         for i_convolution in range(1, convolution_width):
-            ans += cls.reverse_time_shift(activation, i_convolution) @ base[i_convolution, :, :]
+            ans += cls.reverse_time_shift(signal, i_convolution) @ response[i_convolution, :, :]
         return ans
 
     @classmethod
-    def kl_divergence(cls, X, activation, base, filtre=None):
+    def kl_divergence(cls, X, signal, response, filtre=None):
         if filtre is None:
             filtre = np.ones(X.shape)
-        L = cls.convolute(activation, base)
+        L = cls.convolute(signal, response)
         X[X<np.finfo(float).eps] = np.finfo(float).eps
         L[L<np.finfo(float).eps] = np.finfo(float).eps
         return (filtre * (X * (np.log(X) - np.log(L)) - X + L)).sum()
 
     @classmethod
-    def squared_residual(cls, X, activation, base, filtre=None):
+    def squared_residual(cls, X, signal, response, filtre=None):
         if filtre is None:
             filtre = np.ones(X.shape)
-        L = cls.convolute(activation, base)
+        L = cls.convolute(signal, response)
         return (filtre * (X - L) * (X - L)).sum()
 
     @classmethod

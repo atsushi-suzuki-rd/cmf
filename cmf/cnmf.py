@@ -44,6 +44,9 @@ class CNMF(VirtualCMF):
     def _preprocess_input(self, X):
         return X - self.bias
 
+    def _postprocess_output(self, X):
+        return X + self.bias
+
     def _update_signal(self, X, signal, response, filtre, accelerator=None):
         Z = signal
         Z[Z<np.finfo(float).eps] = np.finfo(float).eps
