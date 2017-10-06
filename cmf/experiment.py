@@ -20,6 +20,7 @@ interval = 200
 raw_down_sampled = data[::interval]
 m = raw_down_sampled[used_columns].mean(axis = 0)
 s = raw_down_sampled[used_columns].std(axis = 0)
+min_val = np.array(raw_down_sampled.min(axis=0))
 down_sampled = pd.DataFrame(raw_down_sampled)
 down_sampled[used_columns] = raw_down_sampled[used_columns].sub(m).div(s)
 train_data_length = 250000
@@ -61,6 +62,7 @@ cnmf_arg_dict = dict(
     n_components=2,
     base_max=10.0,
     convergence_threshold=0.0000001,
+    bias = min_val,
     loop_max=100)
 
 nmf_arg_dict = dict(
@@ -68,6 +70,7 @@ nmf_arg_dict = dict(
     n_components=2,
     base_max=10.0,
     convergence_threshold=0.0000001,
+    bias = min_val,
     loop_max=100)
 
 regressor_dict = {
