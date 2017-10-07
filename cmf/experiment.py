@@ -1,13 +1,13 @@
 import numpy as np
 import pandas as pd
 from sklearn import linear_model
-import pyper
 from cmf.cmfpn import CMFPN
 from cmf.cnmf import CNMF
 from cmf.utils import rmse, generate_data
 from cmf.wrapper import TimeSeriesLinearRegression, MatrixCompletionRegression, RPCA
 
 
+file_path = 'ethylene_CO_down_sampled.txt'
 data = pd.read_csv(file_path, delim_whitespace=True)
 gas_columns = list(data.columns[1:3])
 used_columns = list(data.columns[3:19])
@@ -31,14 +31,6 @@ train_section_list = [(start, start+train_data_length) for start in train_start_
 test_section_list = [(start, start+train_data_length) for start in train_start_list]
 # regression_window_length_list = [400, 600, 800, 1000, 1200]
 # l1_weight_list = [0.01, 0.02, 0.03, 0.04, 0.05]
-# lr_error_table = np.float('nan') * np.ones(len(train_start_list))
-# lrn_error_table = np.float('nan') * np.ones(len(train_start_list))
-# mlr_error_table = np.float('nan') * np.ones([len(regression_window_length_list), len(train_start_list)])
-# mlrn_error_table = np.float('nan') * np.ones([len(regression_window_length_list), len(train_start_list)])
-# crmf_completion_error_table = np.float('nan') * np.ones((len(l1_weight_list), len(train_start_list)))
-# cnimf_completion_error_table = np.float('nan') * np.ones((len(train_start_list),))
-# cnimf_with_bias_modification_completion_error_table = np.float('nan') * np.ones((len(train_start_list),))
-# test_data_mean_square_table = np.float('nan') * np.ones((len(train_start_list),))
 
 
 loss_function = rmse
@@ -87,19 +79,6 @@ regressor_dict = {
     'cmf': MatrixCompletionRegression(CMFPN(**cmfpn_arg_dict)),
 }
 
-loss_dict = {}
-for regressor_name in regressor_dict:
-    loss_dict[regressor_name] = np.full(len(train_section_list), np.nan)
 
-for i_section, (X_train, Y_train, X_test, Y_test) \
-        in enumerate(generate_data(data_list=[X, Y, X, Y],
-                                   start_iter_list=[train_section_list,
-                                                    train_section_list,
-                                                    test_section_list,
-                                                    test_section_list])):
-    for regressor_name, regressor in regressor_dict.items():
-        regressor.fit(X_train, Y_train)
-        Y_hat = regressor.predict(X_test)
-        loss = loss_function(Y_hat, Y_test)
-        loss_dict[regressor_name][i_section] = loss
-
+loss_dict = regression_experiment(X, Y, train_section_list, test_section_list, regressor_dict)
+print(loss_dict)

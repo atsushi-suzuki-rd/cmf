@@ -57,11 +57,11 @@ class VirtualCMF(object, metaclass=ABCMeta):
         X = self.convolute(signal, self.response)
         return self._postprocess_output(X)
 
-    def _fit_transform(self, X, filtre = None):
+    def _fit_transform(self, X, filtre=None):
         self._factorize(X, filtre, mode='fit')
         return self.signal
 
-    def _transform(self, X, filtre = None):
+    def _transform(self, X, filtre=None):
         self._factorize(X, filtre, mode='transform')
         return self.signal
 

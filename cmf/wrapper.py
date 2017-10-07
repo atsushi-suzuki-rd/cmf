@@ -18,7 +18,7 @@ class TimeSeriesLinearRegression(object):
 
     def _sliding_duplicate(self, X):
         return np.concatenate(
-            [np.pad(np.array(X), self.window_width, mode='constant', axis=0)[self.window_width-i:-(self.window_width-i), :]
+            [np.pad(np.array(X), pad_width=((self.window_width, self.window_width), (0, 0)), mode='constant', constant_values=0.)[self.window_width+i:-(self.window_width-i), :]
             for i in range(-self.window_width, self.window_width)],
             axis=1)
 
@@ -38,8 +38,8 @@ class MatrixCompletionRegression(object):
     def predict(self, X, **kwargs):
         n_samples = X.shape[0]
         XO = np.concatenate([X, np.zeros((n_samples, self.Y_n_features))], axis=1)
-        F = np.concatenate([np.ones(X.shape), np.zeros((n_samples, self.Y_n_features))])
-        Z = self.matrix_factorizer.transform(X, filtre=F)
+        F = np.concatenate([np.ones(X.shape), np.zeros((n_samples, self.Y_n_features))], axis=1)
+        Z = self.matrix_factorizer.transform(XO, filtre=F)
         XY_hat = self.matrix_factorizer.inverse_transform(Z)
         Y_hat = XY_hat[:, self.X_n_features:]
         return Y_hat
@@ -59,6 +59,7 @@ class RPCA(object):
         self.scale = scale
         self.center = center
         self.loadings = None
+        self.r('library(pcaMethods)')
 
     def fit(self, X):
         self._fit(X)
@@ -66,23 +67,25 @@ class RPCA(object):
     def _fit(self, X):
         self._fit_transform(X)
 
-    def fit_transform(self, X):
-        return self._fit_transform(X)
+    def fit_transform(self, X, filtre=None):
+        return self._fit_transform(X, filtre)
 
-    def _fit_transform(self, X):
+    def _fit_transform(self, X, filtre=None):
+        if filtre is None:
+            filtre = np.ones(X.shape)
+        F = filtre
         X_str = 'X_{}'.format(self.identifier)
         scores_str = 'scores_{}'.format(self.identifier)
+        F_str = 'F_{}'.format(self.identifier)
         self.r.assign(X_str, X)
-        self.r('{} <- pca({}, method="{}", nPcs={}, scale={}, center={})'.format(
-            self.pca_str,
-            X_str,
-            self.method_name,
-            self.n_components,
-            self.scale,
-            self.center))
+        self.r.assign(F_str, F)
+        self.r('{}[{}==NA] <- NA'.format(X_str, F_str))
+        self.r('{} <- pca({}, method="{}", nPcs={}, scale="{}", center={})'.format(self.pca_str, X_str, self.method_name, self.n_components, self.scale, self.center))
         self.r('{} <- {}@loadings'.format(self.loadings_str, self.pca_str))
         self.r('{} <- {}@scores'.format(scores_str, self.pca_str))
-        self.loadings = self.r.get('t({})'.format(self.loadings_str))
+        loadings = self.r.get('t({})'.format(self.loadings_str))
+        self.loadings = loadings
+        return self.loadings
 
     def transform(self, X, filtre=None):
         if filtre is None:

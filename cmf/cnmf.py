@@ -38,7 +38,6 @@ class CNMF(VirtualCMF):
         self.gamma_shape = gamma_shape
         self.gamma_rate = gamma_rate
         self.initialization = initialization
-        self.base_max = base_max
         self.bias = bias
 
     def _preprocess_input(self, X):
@@ -77,8 +76,8 @@ class CNMF(VirtualCMF):
         F = filtre
         Lb = self.convolute(Z, Th)
         for m in range(M):
-            numerator = (self.time_shift(Z, m).T @ (F * X / Lb)) * Th[m, :, :]
-            denominator = self.time_shift(Z, m).T @ F
+            numerator = (self.time_shift(Z, m).T @ (F * X / Lb)) * Th[m, :, :] + np.finfo(float).eps
+            denominator = self.time_shift(Z, m).T @ F + np.finfo(float).eps
             NewTh[m, :, :] = numerator / denominator
         NewTh[NewTh<np.finfo(float).eps] = np.finfo(float).eps
         return NewTh
