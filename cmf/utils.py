@@ -17,10 +17,22 @@ def standard_normalization(data):
     return normalized_data
 
 
-def mad_normalization(data):
+def standard_scaling(data):
+    std = data.std(axis=0)
+    normalized_data = data / std
+    return normalized_data
+
+
+def median_absolute_deviation_normalization(data):
     median = data.median(axis=0)
     mad = (data - median).abs().mean(axis=0)
     normalized_data = (data - median) / mad
+    return normalized_data
+
+
+def absolute_deviation_scaling(data):
+    absolute_deviation = data.abs().mean(axis=0)
+    normalized_data = data / absolute_deviation
     return normalized_data
 
 
@@ -33,19 +45,19 @@ class GasDataLoader(object):
         self.gas_column_list = list(self.data.columns[self.gas_column_idx_list])
         self.sensor_column_list = list(self.data.columns[self.sensor_column_idx_list])
 
-    def get_diff_data_for_regression(self, hidden_sensor_list, normalization=mad_normalization):
+    def get_diff_data_for_regression(self, hidden_sensor_list, normalization=absolute_deviation_scaling):
         hidden_column_idx_list = list(np.array(hidden_sensor_list) + 4)
         observable_column_idx_list = list(set(self.sensor_column_idx_list) - set(hidden_column_idx_list))
         hidden_column_list = list(self.data.columns[hidden_column_idx_list])
         observable_column_list = list(self.data.columns[observable_column_idx_list])
-        normalized_data = normalization(self.data)
-        X = np.array(normalized_data[observable_column_list].diff())[1:]
-        Y = np.array(normalized_data[hidden_column_list].diff())[1:]
+        normalized_data = normalization(self.data.diff()[1:])
+        X = np.array(normalized_data[observable_column_list])
+        Y = np.array(normalized_data[hidden_column_list])
         return X, Y
 
-    def get_diff_data_for_completion(self, hidden_sensor_list, normalization=mad_normalization):
-        normalized_data = normalization(self.data)
-        X = np.array(normalized_data[self.sensor_column_idx_list].diff())[1:]
+    def get_diff_data_for_completion(self, normalization=absolute_deviation_scaling):
+        normalized_data = normalization(self.data.diff()[1:])
+        X = np.array(normalized_data[self.sensor_column_idx_list])
         return X
 
 
