@@ -108,4 +108,8 @@ class RPCA(object):
         return new_scores
 
     def inverse_transform(self, scores):
-        return scores @ self.loadings
+        complete_X_str = 'complete_X_{}'.format(self.identifier)
+        self.r('{} <- {}@completeObs'.format(complete_X_str, self.pca_str))
+        complete_X = self.r.get(complete_X_str)
+        # return scores @ self.loadings
+        return complete_X
