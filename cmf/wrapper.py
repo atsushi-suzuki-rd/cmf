@@ -59,6 +59,7 @@ class RPCA(object):
         self.scale = scale
         self.center = center
         self.loadings = None
+        self.scores = None
         self.r('library(pcaMethods)')
 
     def fit(self, X):
@@ -83,9 +84,11 @@ class RPCA(object):
         self.r('{} <- pca({}, method="{}", nPcs={}, scale="{}", center={})'.format(self.pca_str, X_str, self.method_name, self.n_components, self.scale, self.center))
         self.r('{} <- {}@loadings'.format(self.loadings_str, self.pca_str))
         self.r('{} <- {}@scores'.format(scores_str, self.pca_str))
+        scores = self.r.get(scores_str)
+        self.scores = scores
         loadings = self.r.get('t({})'.format(self.loadings_str))
         self.loadings = loadings
-        return self.loadings
+        return scores
 
     def transform(self, X, filtre=None):
         if filtre is None:
@@ -101,6 +104,7 @@ class RPCA(object):
         self.r('{} <- predict({}, {})'.format(predict_str, self.pca_str, X_new_str))
         self.r('{} <- {}$scores'.format(new_scores_str, predict_str))
         new_scores = self.r.get(new_scores_str)
+        self.scores = new_scores
         return new_scores
 
     def inverse_transform(self, scores):
