@@ -73,10 +73,11 @@ class CMFPN(VirtualCMF):
         K = self.n_components
         M = self.convolution_width
         if self.initialization == 'impulse_svd':
-            Th = np.zeros([M, K, Om])
+            SMALL_NUM = 100 * np.finfo(float).eps
+            Th = np.random.uniform(-SMALL_NUM, SMALL_NUM, [M, K, Om])
             U, s, V = np.linalg.svd(F * X, full_matrices=True)
             Z = U[:, :K] * s[:K][np.newaxis, :]
-            Th[0, :, :] = V[:K, :]
+            # Th[M//2, :, :] = V[:K, :]
         if self.initialization == 'smooth_svd':
             Th = np.zeros([M, K, Om])
             U, s, V = np.linalg.svd(F * X, full_matrices=True)
@@ -87,9 +88,9 @@ class CMFPN(VirtualCMF):
             ica = FastICA(n_components=K)
             Z = ica.fit_transform(X)
             Th0 = ica.mixing_.T
-            SMALL_NUM = 10 * np.finfo(float).eps
-            Th = np.ones([M, K, Om]) * SMALL_NUM
-            Th[0, :, :] = Th0
+            SMALL_NUM = 100 * np.finfo(float).eps
+            Th = np.random.uniform(-SMALL_NUM, SMALL_NUM, [M, K, Om])
+            # Th[M//2, :, :] = Th0
         elif self.initialization == 'smooth_ica':
             ica = FastICA(n_components=K)
             Z_raw = self.reverse_time_shift(ica.fit_transform(X), M//2)

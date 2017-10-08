@@ -121,19 +121,19 @@ class VirtualCMF(object, metaclass=ABCMeta):
         time_origin = time.time()
         accelerator = 10. ** (accelerator_max / loop_cnt * np.arange(0.0, loop_cnt)[::-1])
         for loop_idx in range(0, self.loop_max):
-            new_signal = self._update_signal(X, signal, response, filtre, accelerator[loop_idx])
-            present_loss = self._joint_loss(X, new_signal, response, filtre)
+            if mode == 'fit':
+                new_response = self._update_response(X, signal, response, filtre, accelerator[loop_idx])
+            elif mode == 'transform':
+                new_response = response
+            else:
+                pdb.set_trace()
+            present_loss = self._joint_loss(X, signal, new_response, filtre)
             self.joint_loss_transition[loop_idx, 0] = present_loss
             elapsed_time = time.time() - time_origin
             self.elapsed_time_transition[loop_idx, 0] = elapsed_time
             if self.verbose >= 2:
                 print('loop_idx', loop_idx, 'accelerator', accelerator[loop_idx], 'elapsed_time', elapsed_time, 'joint_loss', present_loss)
-            if mode == 'fit':
-                new_response = self._update_response(X, new_signal, response, filtre, accelerator[loop_idx])
-            elif mode == 'transform':
-                new_response = response
-            else:
-                pdb.set_trace()
+            new_signal = self._update_signal(X, signal, new_response, filtre, accelerator[loop_idx])
             present_loss = self._joint_loss(X, new_signal, new_response, filtre)
             self.joint_loss_transition[loop_idx, 1] = present_loss
             elapsed_time = time.time() - time_origin
