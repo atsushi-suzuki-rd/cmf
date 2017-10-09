@@ -158,6 +158,7 @@ class CMFPN(VirtualCMF):
             raw_numerator = ZFXXiL + ZFHL * np.sign(Th[m, :, :])
             raw_denominator = ZFHL + Nu * np.abs(Th[m, :, :])
             NewTh[m, :, :] = np.abs(Th[m, :, :]) * self.shrink((np.abs(raw_numerator) ** accelerator) * np.sign(raw_numerator), Kp) / ((np.abs(raw_denominator) ** accelerator) * np.sign(raw_denominator) + SMALL_NUM * np.ones(Th[m, :, :].shape))
+        NewTh[np.abs(NewTh)<=SMALL_NUM] = -NewTh[np.abs(NewTh)<=SMALL_NUM]
         return NewTh
 
     def _signal_loss(self, signal):
