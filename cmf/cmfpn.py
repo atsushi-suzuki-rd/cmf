@@ -22,6 +22,7 @@ class CMFPN(VirtualCMF):
                  fit_accelerator_max=0.0, transform_accelerator_max=0.0,
                  initialization='smooth_svd',
                  method='mu',
+                 noise_threshold=0.00, noise_scale=0.01,
                  verbose=0):
 
         super().__init__(**dict(
@@ -40,6 +41,8 @@ class CMFPN(VirtualCMF):
         self.loss_weight = loss_weight
         self.response_l1_weight = response_l1_weight
         self.response_l2_weight = response_l2_weight
+        self.noise_threshold = noise_threshold
+        self.noise_scale = noise_scale
 
     def _check_input(self, X):
         if self.loss_weight is None:
@@ -158,7 +161,7 @@ class CMFPN(VirtualCMF):
             raw_numerator = ZFXXiL + ZFHL * np.sign(Th[m, :, :])
             raw_denominator = ZFHL + Nu * np.abs(Th[m, :, :])
             NewTh[m, :, :] = np.abs(Th[m, :, :]) * self.shrink((np.abs(raw_numerator) ** accelerator) * np.sign(raw_numerator), Kp) / ((np.abs(raw_denominator) ** accelerator) * np.sign(raw_denominator) + SMALL_NUM * np.ones(Th[m, :, :].shape))
-        NewTh[np.abs(NewTh)<=SMALL_NUM] = -NewTh[np.abs(NewTh)<=SMALL_NUM]
+        NewTh[np.abs(NewTh) <= self.noise_threshold] += np.random.normal(0, self.noise_scale, NewTh.shape)[np.abs(NewTh) <= self.noise_threshold]
         return NewTh
 
     def _signal_loss(self, signal):

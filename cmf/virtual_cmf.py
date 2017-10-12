@@ -142,10 +142,10 @@ class VirtualCMF(object, metaclass=ABCMeta):
                 print('loop_idx', loop_idx, 'accelerator', accelerator[loop_idx], 'elapsed_time', elapsed_time, 'joint_loss', present_loss)
             if np.isinf(present_loss):
                 pdb.set_trace()
-            if self._is_converged(present_loss, previous_loss, loop_idx) and loop_idx > self.loop_min:
-                loop_cnt = loop_idx
-                final_loop_cnt = loop_cnt
-                break
+            # if self._is_converged(present_loss, previous_loss, loop_idx) and loop_idx > self.loop_min:
+            #     loop_cnt = loop_idx
+            #     final_loop_cnt = loop_cnt
+            #     break
             previous_loss = present_loss
             response = new_response
             signal = new_signal

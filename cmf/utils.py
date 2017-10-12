@@ -45,31 +45,37 @@ class GasDataLoader(object):
         self.gas_column_list = list(self.data.columns[self.gas_column_idx_list])
         self.sensor_column_list = list(self.data.columns[self.sensor_column_idx_list])
 
-    def get_diff_data_for_regression(self, hidden_sensor_list, normalization=absolute_deviation_scaling):
+    def get_diff_data_for_regression(self, hidden_sensor_list, normalization=absolute_deviation_scaling, interval=1):
         hidden_column_idx_list = list(np.array(hidden_sensor_list) + 4)
         observable_column_idx_list = list(set(self.sensor_column_idx_list) - set(hidden_column_idx_list))
         hidden_column_list = list(self.data.columns[hidden_column_idx_list])
         observable_column_list = list(self.data.columns[observable_column_idx_list])
-        normalized_data = normalization(self.data.diff()[1:])
+        normalized_data = normalization(self.data[::interval].diff()[1:])
         X = np.array(normalized_data[observable_column_list])
         Y = np.array(normalized_data[hidden_column_list])
         return X, Y
 
-    def get_diff_data_for_completion(self, normalization=absolute_deviation_scaling):
-        normalized_data = normalization(self.data.diff()[1:])
+    def get_diff_data_for_completion(self, normalization=absolute_deviation_scaling, interval=1):
+        normalized_data = normalization(self.data[::interval].diff()[1:])
         X = np.array(normalized_data[self.sensor_column_idx_list])
         return X
 
+    def get_gas_diff(self, interval=1, section=None):
+        if section is None:
+            gas_diff = self.data[self.gas_column_list][::interval].diff()[1:]
+        else:
+            gas_diff = self.data[self.gas_column_list][section[0]:section[1]:interval].diff()[1:]
+        return gas_diff
 
 def generate_data(data_list, section_iter_list, interval=1):
     def truncate(data, section_sec, interval=1):
         (start_point, end_point) = (section_sec[0] // interval), (section_sec[1] // interval)
         return data[start_point:end_point]
     for section_sec_tuple in zip(*section_iter_list):
-        yield tuple(truncate(data, start_sec, interval) for data, start_sec in zip(data_list, section_sec_tuple))
+        yield tuple(truncate(data, section_sec, interval) for data, section_sec in zip(data_list, section_sec_tuple))
 
 
-def regression_experiment(X, Y, train_section_list, test_section_list, regressor_dict, loss_function_dict={'rmse': rmse, 'md': md}, verbose=2):
+def regression_experiment(X, Y, train_section_list, test_section_list, regressor_dict, loss_function_dict={'rmse': rmse, 'md': md}, interval=1, verbose=2):
     loss_dict = {}
     for loss_function_name in loss_function_dict:
         loss_dict[loss_function_name] = {}
@@ -81,7 +87,8 @@ def regression_experiment(X, Y, train_section_list, test_section_list, regressor
                                        section_iter_list=[train_section_list,
                                                           train_section_list,
                                                           test_section_list,
-                                                          test_section_list])):
+                                                          test_section_list],
+                                       interval=interval)):
         for regressor_name, regressor in regressor_dict.items():
             if verbose >= 2:
                 print(i_section, regressor_name)
@@ -93,7 +100,7 @@ def regression_experiment(X, Y, train_section_list, test_section_list, regressor
     return loss_dict
 
 
-def completion_experiment(X, section_list, completer_dict, loss_function_dict={'rmse': rmse, 'md': md}, missing_ratio=0.5, verbose=2):
+def completion_experiment(X, section_list, completer_dict, loss_function_dict={'rmse': rmse, 'md': md}, missing_ratio=0.5, interval=1, verbose=2):
     loss_dict = {}
     for loss_function_name in loss_function_dict:
         loss_dict[loss_function_name] = {}
@@ -102,7 +109,8 @@ def completion_experiment(X, section_list, completer_dict, loss_function_dict={'
 
     for i_section, (X_complete, ) \
             in enumerate(generate_data(data_list=[X],
-                                       section_iter_list=[section_list])):
+                                       section_iter_list=[section_list],
+                                       interval=interval)):
         for completer_name, completer in completer_dict.items():
             if verbose >= 2:
                 print(i_section, completer_name)

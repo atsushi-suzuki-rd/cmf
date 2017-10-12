@@ -49,15 +49,17 @@ class RPCA(object):
     n_instances = 0
     r = pyper.R(use_pandas='True', use_numpy=True)
 
-    def __init__(self, n_components=2, method_name='ppca', scale='none', center='FALSE'):
+    def __init__(self, n_components=2, method_name='ppca', scale_option='none', center_option='FALSE'):
         self.identifier = 'py_{}'.format(self.n_instances)
         self.n_instances += 1
         self.pca_str = 'pca_{}'.format(self.identifier)
         self.loadings_str = 'loadings_{}'.format(self.identifier)
+        self.center_str = 'center_{}'.format(self.identifier)
+        self.scale_str = 'scale_{}'.format(self.identifier)
         self.n_components = n_components
         self.method_name = method_name
-        self.scale = scale
-        self.center = center
+        self.scale_option = scale_option
+        self.center_option = center_option
         self.loadings = None
         self.scores = None
         self.r('library(pcaMethods)')
@@ -81,13 +83,19 @@ class RPCA(object):
         self.r.assign(X_str, X)
         self.r.assign(F_str, F)
         self.r('{}[{}==NA] <- NA'.format(X_str, F_str))
-        self.r('{} <- pca({}, method="{}", nPcs={}, scale="{}", center={})'.format(self.pca_str, X_str, self.method_name, self.n_components, self.scale, self.center))
+        self.r('{} <- pca({}, method="{}", nPcs={}, scale="{}", center={})'.format(self.pca_str, X_str, self.method_name, self.n_components, self.scale_option, self.center_option))
         self.r('{} <- {}@loadings'.format(self.loadings_str, self.pca_str))
+        self.r('{} <- {}@center'.format(self.center_str, self.pca_str))
+        self.r('{} <- {}@scale'.format(self.scale_str, self.pca_str))
         self.r('{} <- {}@scores'.format(scores_str, self.pca_str))
         scores = self.r.get(scores_str)
         self.scores = scores
         loadings = self.r.get('t({})'.format(self.loadings_str))
         self.loadings = loadings
+        center = self.r.get(self.center_str)
+        self.center = center
+        scale = self.r.get(self.scale_str)
+        self.scale = scale
         return scores
 
     def transform(self, X, filtre=None):
@@ -108,8 +116,8 @@ class RPCA(object):
         return new_scores
 
     def inverse_transform(self, scores):
-        complete_X_str = 'complete_X_{}'.format(self.identifier)
-        self.r('{} <- {}@completeObs'.format(complete_X_str, self.pca_str))
-        complete_X = self.r.get(complete_X_str)
-        # return scores @ self.loadings
-        return complete_X
+        # complete_X_str = 'complete_X_{}'.format(self.identifier)
+        # self.r('{} <- {}@completeObs'.format(complete_X_str, self.pca_str))
+        # complete_X = self.r.get(complete_X_str)
+        X = (scores @ self.loadings) * self.scale + self.center
+        return X
