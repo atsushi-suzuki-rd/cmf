@@ -25,13 +25,19 @@ def standard_scaling(data):
 
 def median_absolute_deviation_normalization(data):
     median = data.median(axis=0)
-    mad = (data - median).abs().mean(axis=0)
+    if isinstance(median, np.ndarray):
+        mad = np.abs(data - median).mean(axis=0)
+    if isinstance(median, pd.DataFrame):
+        mad = (data - median).abs().mean(axis=0)
     normalized_data = (data - median) / mad
     return normalized_data
 
 
 def absolute_deviation_scaling(data):
-    absolute_deviation = data.abs().mean(axis=0)
+    if isinstance(data, np.ndarray):
+        absolute_deviation = np.abs(data).mean(axis=0)
+    if isinstance(data, pd.DataFrame):
+        absolute_deviation = data.abs().mean(axis=0)
     normalized_data = data / absolute_deviation
     return normalized_data
 
@@ -66,6 +72,7 @@ class GasDataLoader(object):
         else:
             gas_diff = self.data[self.gas_column_list][section[0]:section[1]:interval].diff()[1:]
         return gas_diff
+
 
 def generate_data(data_list, section_iter_list, interval=1):
     def truncate(data, section_sec, interval=1):
