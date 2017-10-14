@@ -127,22 +127,23 @@ def get_final_section(loader):
     return list(generate_data(data_list=[X], section_iter_list=[section_list], interval=interval))[0][0]
 
 
-def plot_estimates_histogram(loader, completer_dict, label):
+def plot_estimates_histogram(loader, completer_dict, label, bound=3.0, bin_interval=0.05, lim_max=500, figsize=(5, 5)):
     X = get_final_section(loader=loader)
-    minimum_center = -0.3
-    maximum_center = 0.3
-    bin_interval = 0.01
-    x_lim_max = 1000
-    edges = np.arange(minimum_center-bin_interval/2, maximum_center+bin_interval/2, bin_interval, dtype=np.float32)
+    minimum_center = -bound
+    maximum_center = +bound
+    edges = np.arange(minimum_center - bin_interval / 2, maximum_center + bin_interval / 2, bin_interval,
+                      dtype=np.float32)
     data_list = [('Test Data 36000-38500s', X)] + \
                 [('Approximated by {}'.format(completer_name), completer.inverse_transform(completer.transform(X)))
-                 for completer_name, completer in completer_dict.items()]
-    fig, axs = plt.subplots(nrows=1, ncols=len(data_list)+1, figsize=(5, 5))
+                 for completer_name, completer in
+                 completer_dict.items()]
+    fig, axs = plt.subplots(ncols=1, nrows=len(data_list), figsize=figsize)
     for (ax, (x_label, data_elements)) in zip(axs, data_list):
         ax.hist(np.array(data_elements).reshape((-1, 1)), bins=edges, alpha=0.6, orientation='vertical')
-        ax.set_ylim(minimum_center-bin_interval/2, maximum_center+bin_interval/2)
-        ax.set_xlim(0, x_lim_max)
+        ax.set_xlim(minimum_center - bin_interval / 2, maximum_center + bin_interval / 2)
+        ax.set_ylim(0, lim_max)
         ax.set_xlabel(x_label)
+    fig.subplots_adjust(hspace=0.5)
     fig.savefig('../dat/estimation/histogram_sdm_{}_{}.png'.format(label[0], label[1]), format='png')
     fig.savefig('../dat/estimation/histogram_sdm_{}_{}.pdf'.format(label[0], label[1]), format='pdf')
     return fig
@@ -150,7 +151,7 @@ def plot_estimates_histogram(loader, completer_dict, label):
 
 def plot_ground_truth(loader, cmf, label, signal_sign_permute=np.identity(2), original_bound=30, system_bound=10, figsize=(15, 2)):
     signal_sign_permute = np.array(signal_sign_permute)
-    fig, axs = plt.subplots(nrows=1, ncols=2, figsize=figsize)
+    fig, axs = plt.subplots(nrows=2, ncols=1, figsize=figsize)
     interval = 10
     section = (36000, 38500)
     truth = np.array(loader.get_gas_diff(interval=interval, section=section))
@@ -161,7 +162,8 @@ def plot_ground_truth(loader, cmf, label, signal_sign_permute=np.identity(2), or
     axs[0].set_xlabel('time /s')
     axs[0].set_ylabel('the magnitude of the change')
     axs[0].set_ylim(-original_bound, original_bound)
-    axs[0].legend(bbox_to_anchor=(1, 1.5), loc='upper right')
+    # axs[0].legend(bbox_to_anchor=(1, 1.5), loc='upper right')
+    axs[0].legend(loc='upper right')
     X = get_final_section(loader=loader)
     Z = cmf.transform(X)
     scaled_Z = absolute_deviation_scaling(Z) @ signal_sign_permute
@@ -170,7 +172,8 @@ def plot_ground_truth(loader, cmf, label, signal_sign_permute=np.identity(2), or
     axs[1].set_xlabel('time /s')
     axs[1].set_ylabel('the magnitude of the impulse responses')
     axs[1].set_ylim(-system_bound, system_bound)
-    axs[1].legend(bbox_to_anchor=(1, 1.5), loc='upper right')
+    # axs[1].legend(bbox_to_anchor=(1, 1.5), loc='upper right')
+    axs[1].legend(loc='upper right')
     # fig.tight_layout()
     fig.subplots_adjust(top=0.75)
     fig.savefig('../dat/estimation/density_signal_sdm_{}_{}.png'.format(label[0], label[1]), format='png')
